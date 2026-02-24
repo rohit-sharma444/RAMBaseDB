@@ -1,0 +1,390 @@
+@page "/"
+@using RAMBaseDB.Domain.Entities
+@using RAMBaseDB.Domain.Workspace
+@inject NavigationManager Navigation
+@inject RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration ConfigurationStore
+@inject ILogger<MainMenu> Logger
+@inject RAMBaseDB.Infrastructure.Services.IWorkspaceInsightService Insights
+
+<PageTitle>Workspace</PageTitle>
+
+<section class="main-menu">
+    <div class="main-menu__hero">
+        <div>
+            <p class="label">Workspace</p>
+            <h1>RAMBaseDB Control Center</h1>
+            <p class="lead">
+                Launch each provisioning track with confidence. Review live database, snapshot, and access telemetry,
+                then jump into the guided builders to finalize configuration, creation, schema, or user onboarding.
+            </p>
+
+            <div class="main-menu__hero-actions">
+                <button type="button" class="btn-primary" @onclick="NavigateToConfiguration">
+                    Configure workspace
+                </button>
+                <button type="button" class="btn-ghost" @onclick="NavigateToTableDesigner">
+                    Design tables
+                </button>
+                <button type="button" class="btn-ghost" @onclick="NavigateToTableUpload">
+                    Upload tables
+                </button>
+            </div>
+        </div>
+
+        <article class="main-menu__hero-panel">
+            <p class="label label--muted">Snapshot status</p>
+            <h3>@FormatSnapshotHeadline()</h3>
+            <p class="main-menu__hero-panel-hint">@FormatSnapshotSubtitle()</p>
+
+            <div class="main-menu__hero-meta">
+                <div>
+                    <p class="meta-label">Directory</p>
+                    <code>@(_overview?.SnapshotDirectory ?? "Snapshots")</code>
+                </div>
+                <div>
+                    <p class="meta-label">Files</p>
+                    <strong>@((_overview?.SnapshotCount ?? 0).ToString("N0"))</strong>
+                </div>
+            </div>
+        </article>
+    </div>
+
+    <section class="main-menu__stats">
+        @if (_insightError is not null)
+        {
+            <div class="main-menu__alert">@_insightError</div>
+        }
+        else
+        {
+            var statCards = BuildStatCards();
+            <div class="stats-grid">
+                @if (statCards.Count == 0)
+                {
+                    @for (var i = 0; i < 4; i++)
+                    {
+                        <article class="stat-card stat-card--skeleton"></article>
+                    }
+                }
+                else
+                {
+                    @foreach (var stat in statCards)
+                    {
+                        <article class="stat-card">
+                            <p class="stat-card__label">@stat.Label</p>
+                            <h3>@stat.Value</h3>
+                            <p class="stat-card__hint">@stat.Hint</p>
+                        </article>
+                    }
+                }
+            </div>
+        }
+    </section>
+
+    <div class="menu-grid">
+        @foreach (var option in MenuOptions)
+        {
+            <article class="menu-card">
+                <div class="menu-card__header">
+                    <span class="menu-card__icon @($"menu-card__icon--{option.Icon}")"></span>
+                    <div>
+                        <span class="menu-card__badge">@option.Badge</span>
+                        <span class="menu-card__status">@option.Status</span>
+                    </div>
+                </div>
+
+                <div>
+                    <h2>@option.Title</h2>
+                    <p>@option.Description</p>
+                </div>
+
+                <div class="menu-card__footer">
+                    <div>
+                        <p class="menu-card__hint">@option.Hint</p>
+                        <small>@option.Expectation</small>
+                    </div>
+                    <button type="button" class="menu-card__action" @onclick="() => HandleAction(option)">
+                        @option.ActionLabel
+                    </button>
+                </div>
+            </article>
+        }
+    </div>
+
+    <section class="main-menu__details">
+        @if (_selectedOption is not null)
+        {
+            <article class="selection-panel">
+                <p class="label">Active focus</p>
+                <h3>@_selectedOption.Title</h3>
+                <p>@_selectedOption.Description</p>
+                <p class="selection-panel__hint">@_selectedOption.Expectation</p>
+
+                <div class="selection-panel__configs">
+                    <div class="selection-panel__configs-header">
+                        <p class="label">Saved configurations</p>
+                        <small>Jump into any saved database profile to edit its settings.</small>
+                    </div>
+
+                    @if (_savedConfigurations.Count == 0)
+                    {
+                        <p class="selection-panel__empty">No database configurations found.</p>
+                    }
+                    else
+                    {
+                        <ul class="selection-panel__config-list">
+                            @foreach (var configuration in _savedConfigurations)
+                            {
+                                <li>
+                                    <a href="@configuration.Route">@configuration.DatabaseName</a>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </article>
+        }
+
+        <article class="snapshot-panel">
+            <div class="snapshot-panel__header">
+                <p class="label">Snapshot timeline</p>
+                <small>@(_overview?.SnapshotDirectory ?? "Snapshots")</small>
+            </div>
+
+            @if (_overview?.Snapshots.Count > 0)
+            {
+                <ul class="snapshot-panel__list">
+                    @foreach (var snapshot in _overview.Snapshots)
+                    {
+                        <li>
+                            <div>
+                                <p class="snapshot-panel__name">@snapshot.FileName</p>
+                                <small>@snapshot.LastWriteTimeUtc.ToLocalTime().ToString("g")</small>
+                            </div>
+                            <span class="snapshot-panel__size">@FormatSize(snapshot.SizeBytes)</span>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <p class="snapshot-panel__empty">No snapshots have been captured yet.</p>
+            }
+        </article>
+    </section>
+</section>
+
+@code {
+    private sealed record MenuOption(
+        string Title,
+        string Description,
+        string Badge,
+        string Status,
+        string Hint,
+        string Expectation,
+        string ActionLabel,
+        string? Route,
+        string Icon
+    );
+
+    private sealed record SavedConfigurationLink(string DatabaseName, string Route);
+    private sealed record StatCard(string Label, string Value, string Hint);
+
+    private readonly IReadOnlyList<MenuOption> MenuOptions = new List<MenuOption>
+    {
+        new(
+            "Database Configuration",
+            "Set credentials, regions, and performance policies before provisioning environments.",
+            "Configure",
+            "Required",
+            "Define connectivity and provider details.",
+            "Typically completed by a platform engineer.",
+            "Configure",
+            "/database-configuration",
+            "config"
+        ),
+        new(
+            "Database Creation",
+            "Provision new instances, seed starter data, and track creation status for each workspace.",
+            "Creation",
+            "Pending",
+            "Launch new databases.",
+            "Uses the configuration profile selected above.",
+            "Create",
+            "/database-creation",
+            "deploy"
+        ),
+        new(
+            "Table Management",
+            "Model tables with a tree-based field explorer and configure column properties before deployment.",
+            "Schema",
+            "In progress",
+            "Create / amend / delete tables and fields for each workspace.",
+            "Keep schema changes aligned with the provisioning process.",
+            "Design Tables",
+            "/table-creation",
+            "schema"
+        ),
+        new(
+            "Table Upload",
+            "Import metadata JSON files produced by external tooling to register tables instantly.",
+            "Schema",
+            "Optional",
+            "Great for pipelines that emit Metadata/<db>/Tables payloads.",
+            "Each uploaded file should represent one table definition.",
+            "Upload Tables",
+            "/table-upload",
+            "upload"
+        ),
+        new(
+            "User Management",
+            "Invite administrators and grant scoped permissions for each database environment.",
+            "Access",
+            "Queued",
+            "Set up the initial admin accounts.",
+            "Map users to the database instances they need.",
+            "Manage Users",
+            "/user-management",
+            "users"
+        )
+    };
+
+    private MenuOption? _selectedOption;
+    private WorkspaceOverview? _overview;
+    private string? _insightError;
+    private IReadOnlyList<SavedConfigurationLink> _savedConfigurations = Array.Empty<SavedConfigurationLink>();
+
+    protected override void OnInitialized()
+    {
+        _selectedOption = MenuOptions.FirstOrDefault();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSavedConfigurationsAsync();
+        await LoadWorkspaceOverviewAsync();
+    }
+
+    private void HandleAction(MenuOption option)
+    {
+        if (!string.IsNullOrWhiteSpace(option.Route))
+        {
+            Navigation.NavigateTo(option.Route);
+            return;
+        }
+
+        _selectedOption = option;
+    }
+
+    private void NavigateToConfiguration()
+        => Navigation.NavigateTo("/database-configuration");
+
+    private void NavigateToTableDesigner()
+        => Navigation.NavigateTo("/table-creation");
+
+    private void NavigateToTableUpload()
+        => Navigation.NavigateTo("/table-upload");
+
+    private async Task LoadSavedConfigurationsAsync()
+    {
+        try
+        {
+            var configurations = await ConfigurationStore.ListConfigurationsAsync();
+            _savedConfigurations = configurations
+                .Select(ExtractDatabaseName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(name => new SavedConfigurationLink(name, BuildConfigurationUri(name)))
+                .ToArray();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load saved database configurations.");
+            _savedConfigurations = Array.Empty<SavedConfigurationLink>();
+        }
+    }
+
+    private async Task LoadWorkspaceOverviewAsync()
+    {
+        try
+        {
+            _overview = await Insights.CaptureAsync();
+            _insightError = null;
+        }
+        catch (Exception exception)
+        {
+            _overview = null;
+            _insightError = "Unable to load workspace insights.";
+            Logger.LogError(exception, "Failed to capture workspace insights.");
+        }
+    }
+
+    private IReadOnlyList<StatCard> BuildStatCards()
+    {
+        if (_overview is null)
+            return Array.Empty<StatCard>();
+
+        return new[]
+        {
+            new StatCard(
+                "Databases",
+                _overview.DatabaseCount.ToString("N0"),
+                $"{_overview.TableCount:N0} tables tracked"),
+            new StatCard(
+                "Saved configs",
+                _overview.SavedConfigurationCount.ToString("N0"),
+                "Profiles stored in Config directory"),
+            new StatCard(
+                "Snapshots",
+                _overview.SnapshotCount.ToString("N0"),
+                $"{FormatSize(_overview.SnapshotFootprintBytes)} on disk"),
+            new StatCard(
+                "User definitions",
+                _overview.UserDocumentCount.ToString("N0"),
+                "JSON files in Users folder")
+        };
+    }
+
+    private string FormatSnapshotHeadline()
+    {
+        if (_overview?.LatestSnapshotUtc is not DateTimeOffset timestamp)
+            return "No snapshots yet";
+
+        return $"Last snapshot {timestamp.ToLocalTime():g}";
+    }
+
+    private string FormatSnapshotSubtitle()
+    {
+        if (_overview is null)
+            return "Once the automation service runs, snapshots will appear here.";
+
+        return $"Retention: {_overview.SnapshotCount:N0} file(s) · {_overview.DefaultDatabase} database";
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes <= 0)
+            return "0 B";
+
+        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+        var index = (int)Math.Min(suffixes.Length - 1, Math.Log(bytes, 1024));
+        var value = bytes / Math.Pow(1024, index);
+        return $"{value:0.##} {suffixes[index]}";
+    }
+
+    private static string ExtractDatabaseName(string? entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry))
+            return string.Empty;
+
+        const string suffix = "-config";
+        return entry.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            ? entry[..^suffix.Length]
+            : entry;
+    }
+
+    private static string BuildConfigurationUri(string databaseName)
+    {
+        var encoded = Uri.EscapeDataString(databaseName);
+        return $"/database-configuration?database={encoded}";
+    }
+}

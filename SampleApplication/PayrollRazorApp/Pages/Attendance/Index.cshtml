@@ -1,0 +1,103 @@
+@page
+@model PayrollRazorApp.Pages.Attendance.IndexModel
+@{
+    ViewData["Title"] = "Attendance";
+}
+
+<h1 class="display-6 mb-4">Attendance Entries</h1>
+<p class="text-muted">Capture daily attendance or leave for every employee.</p>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header">Recent entries</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Employee</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Check-in</th>
+                            <th scope="col">Check-out</th>
+                            <th scope="col">Notes</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.Entries.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">No attendance entries yet.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var entry in Model.Entries)
+                            {
+                                <tr>
+                                    <td>@entry.WorkDate.ToString("yyyy-MM-dd")</td>
+                                    <td>@(Model.EmployeeLookup.TryGetValue(entry.EmployeeId, out var employee) ? employee : $"Employee #{entry.EmployeeId}")</td>
+                                    <td>@entry.Status</td>
+                                    <td>@(entry.CheckIn?.ToString(@"hh\:mm") ?? "-")</td>
+                                    <td>@(entry.CheckOut?.ToString(@"hh\:mm") ?? "-")</td>
+                                    <td>@entry.Notes</td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header">New entry</div>
+            <div class="card-body">
+                <form method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <div class="mb-3">
+                        <label asp-for="Input.EmployeeId" class="form-label"></label>
+                        <select asp-for="Input.EmployeeId" asp-items="Model.EmployeeOptions" class="form-select">
+                            <option value="">-- select employee --</option>
+                        </select>
+                        <span asp-validation-for="Input.EmployeeId" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.WorkDate" class="form-label"></label>
+                        <input asp-for="Input.WorkDate" type="date" class="form-control" />
+                        <span asp-validation-for="Input.WorkDate" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Status" class="form-label"></label>
+                        <select asp-for="Input.Status" asp-items="Model.StatusOptions" class="form-select"></select>
+                        <span asp-validation-for="Input.Status" class="text-danger"></span>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="Input.CheckIn" class="form-label"></label>
+                            <input asp-for="Input.CheckIn" type="time" step="60" class="form-control" />
+                            <span asp-validation-for="Input.CheckIn" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.CheckOut" class="form-label"></label>
+                            <input asp-for="Input.CheckOut" type="time" step="60" class="form-control" />
+                            <span asp-validation-for="Input.CheckOut" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label asp-for="Input.Notes" class="form-label"></label>
+                        <textarea asp-for="Input.Notes" rows="3" class="form-control"></textarea>
+                        <span asp-validation-for="Input.Notes" class="text-danger"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save entry</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

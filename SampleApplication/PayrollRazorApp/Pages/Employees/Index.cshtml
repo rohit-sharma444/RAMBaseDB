@@ -1,0 +1,127 @@
+@page
+@model PayrollRazorApp.Pages.Employees.IndexModel
+@{
+    ViewData["Title"] = "Employees";
+}
+
+<h1 class="display-6 mb-4">Employee Master</h1>
+<p class="text-muted">Employees join companies and departments. Capture key contact details and salary for payroll use.</p>
+
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">Employees</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">Employee</th>
+                            <th scope="col">Company</th>
+                            <th scope="col">Department</th>
+                            <th scope="col">Contact</th>
+                            <th scope="col">Hire date</th>
+                            <th scope="col" class="text-end">Salary</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.Employees.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">Add your first employee.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var employee in Model.Employees)
+                            {
+                                <tr>
+                                    <td>@employee.EmployeeNumber</td>
+                                    <td>@employee.FirstName @employee.LastName</td>
+                                    <td>@(Model.CompanyLookup.TryGetValue(employee.CompanyId, out var company) ? company : $"Company #{employee.CompanyId}")</td>
+                                    <td>@(Model.DepartmentLookup.TryGetValue(employee.DepartmentId, out var dept) ? dept : $"Department #{employee.DepartmentId}")</td>
+                                    <td>
+                                        <div>@employee.Email</div>
+                                        <div class="text-body-secondary">@employee.Phone</div>
+                                    </td>
+                                    <td>@employee.HireDate.ToString("yyyy-MM-dd")</td>
+                                    <td class="text-end">@employee.Salary.ToString("C0")</td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header">Add employee</div>
+            <div class="card-body">
+                <form method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="Input.CompanyId" class="form-label"></label>
+                            <select asp-for="Input.CompanyId" asp-items="Model.CompanyOptions" class="form-select">
+                                <option value="">-- select company --</option>
+                            </select>
+                            <span asp-validation-for="Input.CompanyId" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.DepartmentId" class="form-label"></label>
+                            <select asp-for="Input.DepartmentId" asp-items="Model.DepartmentOptions" class="form-select">
+                                <option value="">-- select department --</option>
+                            </select>
+                            <span asp-validation-for="Input.DepartmentId" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="Input.EmployeeNumber" class="form-label"></label>
+                            <input asp-for="Input.EmployeeNumber" class="form-control" />
+                            <span asp-validation-for="Input.EmployeeNumber" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="Input.FirstName" class="form-label"></label>
+                            <input asp-for="Input.FirstName" class="form-control" />
+                            <span asp-validation-for="Input.FirstName" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="Input.LastName" class="form-label"></label>
+                            <input asp-for="Input.LastName" class="form-control" />
+                            <span asp-validation-for="Input.LastName" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.Email" class="form-label"></label>
+                            <input asp-for="Input.Email" class="form-control" />
+                            <span asp-validation-for="Input.Email" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.Phone" class="form-label"></label>
+                            <input asp-for="Input.Phone" class="form-control" />
+                            <span asp-validation-for="Input.Phone" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.HireDate" class="form-label"></label>
+                            <input asp-for="Input.HireDate" class="form-control" type="date" />
+                            <span asp-validation-for="Input.HireDate" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.Salary" class="form-label"></label>
+                            <input asp-for="Input.Salary" class="form-control" type="number" step="100" min="0" />
+                            <span asp-validation-for="Input.Salary" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">Save employee</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

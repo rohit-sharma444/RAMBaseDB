@@ -1,0 +1,120 @@
+@inherits LayoutComponentBase
+@inject IWebHostEnvironment HostEnvironment
+
+<div class="workspace-shell">
+    <aside class="workspace-shell__sidebar" aria-label="Workspace navigation">
+        <div class="sidebar__brand">
+            <span class="sidebar__logo">R</span>
+            <div>
+                <p class="sidebar__title">RAMBaseDB</p>
+                <p class="sidebar__subtitle">Data Control Plane</p>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            @foreach (var link in NavigationLinks)
+            {
+                <NavLink @key="link.Href"
+                         class="sidebar-nav__link"
+                         href="@link.Href"
+                         Match="@link.Match">
+                    <span class="sidebar-nav__icon @($"sidebar-nav__icon--{link.Icon}")" aria-hidden="true"></span>
+                    <div class="sidebar-nav__copy">
+                        <span class="sidebar-nav__label">@link.Label</span>
+                        <small>@link.Description</small>
+                    </div>
+                    <span class="sidebar-nav__chevron" aria-hidden="true">›</span>
+                </NavLink>
+            }
+        </nav>
+
+        <section class="sidebar__meta">
+            <div class="sidebar__meta-row">
+                <span class="status-dot"></span>
+                <div>
+                    <p class="sidebar__meta-label">Environment</p>
+                    <p class="sidebar__meta-value">@HostEnvironment.EnvironmentName</p>
+                </div>
+            </div>
+            <div>
+                <p class="sidebar__meta-label">Workspace root</p>
+                <p class="sidebar__meta-value">@ShortenPath(HostEnvironment.ContentRootPath)</p>
+            </div>
+        </section>
+    </aside>
+
+    <div class="workspace-shell__main">
+        <header class="workspace-shell__header">
+            <div class="workspace-shell__headline">
+                <p class="eyebrow">Workspace Studio</p>
+                <h1>RAMBaseDB orchestration surface</h1>
+                <p>Configure databases, capture metadata, and manage access through a single control surface.</p>
+            </div>
+
+            <div class="workspace-shell__status-grid" aria-live="polite">
+                <article class="status-card">
+                    <p class="status-card__label">Runtime</p>
+                    <strong>@HostEnvironment.EnvironmentName</strong>
+                    <small>Interactive server components</small>
+                </article>
+                <article class="status-card">
+                    <p class="status-card__label">UTC time</p>
+                    <strong>@_renderedAt.ToString("HH:mm")</strong>
+                    <small>@_renderedAt.ToString("ddd, dd MMM")</small>
+                </article>
+                <article class="status-card status-card--links">
+                    <p class="status-card__label">Resources</p>
+                    <div class="status-card__links">
+                        <a href="https://github.com/" target="_blank" rel="noreferrer">Repository</a>
+                        <a href="https://learn.microsoft.com/aspnet/core/blazor/" target="_blank" rel="noreferrer">Blazor docs</a>
+                    </div>
+                </article>
+            </div>
+        </header>
+
+        <main class="workspace-shell__body">
+            @Body
+        </main>
+
+        <footer class="workspace-shell__footer">
+            <small>&copy; @DateTime.UtcNow.Year RAMBaseDB &middot; Snapshot automation active</small>
+        </footer>
+    </div>
+</div>
+
+<div id="blazor-error-ui" role="alert">
+    <span>An unhandled error has occurred.</span>
+    <a href="" class="reload">Reload</a>
+    <button type="button" class="dismiss" aria-label="Dismiss error">×</button>
+</div>
+
+@code {
+    private readonly DateTime _renderedAt = DateTime.UtcNow;
+
+    private sealed record NavigationLink(
+        string Label,
+        string Description,
+        string Href,
+        string Icon,
+        NavLinkMatch Match);
+
+    private static readonly NavigationLink[] NavigationLinks =
+    {
+        new("Workspace", "Overview & health", "/", "overview", NavLinkMatch.All),
+        new("Configuration", "Defaults & connectivity", "/database-configuration", "config", NavLinkMatch.Prefix),
+        new("Database creation", "Promote instances", "/database-creation", "provision", NavLinkMatch.Prefix),
+        new("Table designer", "Metadata & schema", "/table-creation", "schema", NavLinkMatch.Prefix),
+        new("User management", "Access control", "/user-management", "users", NavLinkMatch.Prefix)
+    };
+
+    private static string ShortenPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "Not available";
+
+        const int maxLength = 42;
+        return path.Length <= maxLength
+            ? path
+            : $"...{path[^maxLength..]}";
+    }
+}

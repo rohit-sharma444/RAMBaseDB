@@ -1,0 +1,463 @@
+@page "/database-creation"
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.WebUtilities
+@using System.ComponentModel.DataAnnotations
+@using System.IO
+@inject NavigationManager Navigation
+@inject RAMBaseDB.Application.DatabaseEngine DatabaseEngine
+@inject RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration ConfigurationStore
+@inject ILogger<DatabaseCreation> Logger
+
+<PageTitle>Database Creation</PageTitle>
+
+<section class="db-create">
+    <header class="db-create__header">
+        <div>
+            <p class="label">Provisioning</p>
+            <h1>Database Creation</h1>
+            <p>
+                Review every saved configuration and promote pending databases into live in-memory instances.
+                Pending entries surface as hyperlinks; created databases remain informational only.
+            </p>
+        </div>
+
+        <button type="button" class="ghost-btn" @onclick="NavigateToMainMenu">
+            Back to Main Menu
+        </button>
+    </header>
+
+    <div class="db-create__content">
+        <section class="db-create__catalog">
+            <div class="db-create__catalog-header">
+                <div>
+                    <p class="label">Configured databases</p>
+                    <small>Hyperlinks indicate databases that still need to be created.</small>
+                </div>
+                <span class="db-create__count">@_databases.Count</span>
+            </div>
+
+            @if (_databases.Count == 0)
+            {
+                <p class="db-create__empty">No database configurations were found.</p>
+            }
+            else
+            {
+                <ul class="db-create__list">
+                    @foreach (var entry in _databases)
+                    {
+                        var cssClass = entry.IsCreated
+                            ? "db-create__item db-create__item--created"
+                            : "db-create__item db-create__item--pending";
+
+                        <li class="@cssClass">
+                            <div class="db-create__item-body">
+                                <button type="button"
+                                        class="db-create__name db-create__name-button @(entry.IsCreated ? "db-create__name-button--created" : "db-create__name-button--pending")"
+                                        @onclick="() => HandleDatabaseLinkClick(entry.Name)">
+                                    @entry.Name
+                                </button>
+                                <small>@(entry.IsCreated ? "Created" : "Pending")</small>
+                            </div>
+
+                            <div class="db-create__item-actions">
+                                @if (IsSelected(entry.Name))
+                                {
+                                    <span class="db-create__selected">Selected</span>
+                                }
+
+                                <button type="button"
+                                        class="db-create__delete-button"
+                                        title="Delete @entry.Name"
+                                        disabled="@(_isDeleting || _isSaving)"
+                                        @onclick="() => DeleteDatabaseAsync(entry.Name)">
+                                    Delete
+                                </button>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="db-create__form">
+            <EditForm Model="_creation" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                @if (_statusMessage is not null)
+                {
+                    <div class="status-pill">@_statusMessage</div>
+                }
+
+                <div class="form-row">
+                    <label for="databaseName">Database Name</label>
+                    <InputText id="databaseName" @bind-Value="_creation.DatabaseName" placeholder="Select a pending database" />
+                </div>
+
+                <p class="db-create__hint">
+                    Choose a pending configuration from the list or type its name manually, then save to create the database.
+                </p>
+
+                <div class="form-actions">
+                    <button type="button" class="ghost-btn" @onclick="ResetSelection">Clear</button>
+                    <button type="submit" class="primary-btn" disabled="@(_isSaving || _isDeleting)">
+                        Create
+                    </button>
+                </div>
+            </EditForm>
+        </section>
+    </div>
+</section>
+
+@code {
+    private sealed record DatabaseStatus(string Name, bool IsCreated);
+
+    private sealed class DatabaseCreationForm
+    {
+        [Required(ErrorMessage = "Database name is required.")]
+        public string DatabaseName { get; set; } = string.Empty;
+    }
+
+    private IReadOnlyList<DatabaseStatus> _databases = Array.Empty<DatabaseStatus>();
+    private HashSet<string> _loadedDatabaseNames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly DatabaseCreationForm _creation = new();
+    private string? _selectedDatabase;
+    private string? _statusMessage;
+    private bool _isSaving;
+    private bool _isDeleting;
+
+    private bool CanDeleteSelectedDatabase
+        => _databases.Any(status => status.IsCreated && IsSelected(status.Name));
+
+    protected override async Task OnInitializedAsync()
+    {
+        ApplyRequestedDatabase();
+        await LoadDatabaseStatusesAsync();
+        EnsureSelection();
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyRequestedDatabase();
+        EnsureSelection();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (_isSaving || _isDeleting)
+            return;
+
+        var databaseName = NormalizeDatabaseName(_creation.DatabaseName);
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            _statusMessage = "Select a database to create.";
+            return;
+        }
+
+        _isSaving = true;
+        _statusMessage = null;
+
+        try
+        {
+            var configuration = await LoadConfigurationAsync(databaseName);
+            if (configuration is null)
+            {
+                _statusMessage = $"Configuration for '{databaseName}' was not found.";
+                return;
+            }
+
+            if (DatabaseEngine.Exists(databaseName))
+            {
+                _statusMessage = $"Database '{databaseName}' already exists.";
+                return;
+            }
+
+            // if (configuration.DataConfig.DatabaseExists)
+            // {
+            //     _statusMessage = $"Database '{databaseName}' has already been created.";
+            //     return;
+            // }
+
+            DatabaseEngine.CreateDatabase(configuration);
+            await PersistDatabaseCreationAsync(configuration);
+            _statusMessage = $"Database '{databaseName}' created.";
+            _selectedDatabase = databaseName;
+
+            await LoadDatabaseStatusesAsync();
+            EnsureSelection();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to create database {DatabaseName}", databaseName);
+            _statusMessage = "Failed to create database.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void ResetSelection()
+    {
+        _selectedDatabase = null;
+        _creation.DatabaseName = string.Empty;
+        _statusMessage = null;
+    }
+
+    private void NavigateToMainMenu() => Navigation.NavigateTo("/");
+
+    private async Task LoadDatabaseStatusesAsync()
+    {
+        try
+        {
+            var configurations = await ConfigurationStore.ListConfigurationsAsync();
+            var statuses = new List<DatabaseStatus>();
+            _loadedDatabaseNames = DatabaseEngine.Databases
+                .Where(db => !string.IsNullOrWhiteSpace(db.Name))
+                .Select(db => db.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in configurations)
+            {
+                var databaseName = ExtractDatabaseName(entry);
+                if (string.IsNullOrWhiteSpace(databaseName))
+                    continue;
+
+                var isCreated = await IsDatabasePersistedAsCreatedAsync(databaseName);
+                statuses.Add(new DatabaseStatus(databaseName, isCreated));
+            }
+
+            _databases = statuses
+                .OrderBy(status => status.IsCreated ? 1 : 0)
+                .ThenBy(status => status.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load database configurations.");
+            _databases = Array.Empty<DatabaseStatus>();
+            _statusMessage = "Unable to load configured databases.";
+            _loadedDatabaseNames = new(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private void ApplyRequestedDatabase()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (string.IsNullOrEmpty(uri.Query))
+            return;
+
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (!query.TryGetValue("database", out var requestedDatabase))
+            return;
+
+        var candidate = requestedDatabase.ToString();
+        if (!string.IsNullOrWhiteSpace(candidate))
+            _selectedDatabase = candidate;
+    }
+
+    private void EnsureSelection()
+    {
+        if (!string.IsNullOrWhiteSpace(_selectedDatabase))
+        {
+            _creation.DatabaseName = _selectedDatabase;
+            return;
+        }
+
+        var pending = _databases.FirstOrDefault(status => !status.IsCreated);
+        _creation.DatabaseName = pending?.Name ?? string.Empty;
+    }
+
+    private async Task<RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration?> LoadConfigurationAsync(string databaseName)
+    {
+        try
+        {
+            var configuration = new RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration();
+            configuration.DataConfig.DatabaseName = databaseName;
+
+            var model = await configuration.LoadAsync();
+            configuration.DataConfig = model ?? new RAMBaseDB.Domain.Configuration.DatabaseConfigurationModel();
+
+            if (string.IsNullOrWhiteSpace(configuration.DataConfig.DatabaseName))
+                configuration.DataConfig.DatabaseName = databaseName;
+
+            return configuration;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load configuration for {DatabaseName}", databaseName);
+            return null;
+        }
+    }
+
+    private static string ExtractDatabaseName(string? entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry))
+            return string.Empty;
+
+        const string suffix = "-config";
+        return entry.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            ? entry[..^suffix.Length]
+            : entry;
+    }
+
+    private string BuildSelectionUri(string databaseName)
+    {
+        var encoded = Uri.EscapeDataString(databaseName);
+        return $"/database-creation?database={encoded}";
+    }
+
+    private async Task DeleteDatabaseAsync(string databaseName)
+    {
+        if (_isDeleting || _isSaving)
+            return;
+
+        SelectDatabase(databaseName);
+        await DeleteSelectedDatabaseAsync();
+    }
+
+    private async Task DeleteConfigurationFileAsync(RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration configuration, string databaseName)
+    {
+        try
+        {
+            await configuration.DeleteAsync(databaseName);
+        }
+        catch (InvalidOperationException exception)
+        {
+            Logger.LogWarning(exception, "Database configuration {DatabaseName} could not be deleted.", databaseName);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to remove configuration for {DatabaseName}", databaseName);
+        }
+    }
+
+    private void DeleteDatabaseFolder(string databaseName)
+    {
+        if (string.IsNullOrWhiteSpace(databaseName))
+            return;
+
+        var metadataDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Metadata", databaseName);
+        if (!Directory.Exists(metadataDirectory))
+            return;
+
+        try
+        {
+            Directory.Delete(metadataDirectory, recursive: true);
+        }
+        catch (IOException exception)
+        {
+            Logger.LogWarning(exception, "Metadata directory for {DatabaseName} could not be deleted.", databaseName);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            Logger.LogWarning(exception, "Access denied while deleting metadata directory for {DatabaseName}.", databaseName);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unexpected error deleting metadata directory for {DatabaseName}.", databaseName);
+        }
+    }
+
+    private void HandleDatabaseLinkClick(string databaseName)
+    {
+        SelectDatabase(databaseName);
+        Navigation.NavigateTo(BuildSelectionUri(databaseName));
+    }
+
+    private void SelectDatabase(string databaseName)
+    {
+        _selectedDatabase = databaseName;
+        _creation.DatabaseName = databaseName;
+        _statusMessage = null;
+    }
+
+    private bool IsSelected(string databaseName)
+        => !string.IsNullOrWhiteSpace(_creation.DatabaseName)
+           && string.Equals(_creation.DatabaseName, databaseName, StringComparison.OrdinalIgnoreCase);
+
+    private async Task PersistDatabaseCreationAsync(RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration configuration)
+    {
+        configuration.DataConfig.DatabaseExists = true;
+        await configuration.SaveAsync(configuration.DataConfig);
+    }
+
+    private async Task DeleteSelectedDatabaseAsync()
+    {
+        if (_isDeleting || _isSaving)
+            return;
+
+        var databaseName = NormalizeDatabaseName(_creation.DatabaseName);
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            _statusMessage = "Select a database to delete.";
+            return;
+        }
+
+        _isDeleting = true;
+        _statusMessage = null;
+
+        try
+        {
+            var configuration = await LoadConfigurationAsync(databaseName);
+            if (configuration is null || !ConfigurationFileExists(configuration))
+            {
+                _statusMessage = $"Configuration for '{databaseName}' was not found.";
+                return;
+            }
+
+            var isPersisted = configuration.DataConfig.DatabaseExists;
+            var existsInMemory = DatabaseEngine.Exists(databaseName);
+
+            if (!isPersisted && !existsInMemory)
+            {
+                _statusMessage = $"Database '{databaseName}' has not been created yet.";
+                return;
+            }
+
+            if (existsInMemory && !DatabaseEngine.DropDatabase(databaseName))
+                Logger.LogWarning("Database {DatabaseName} was not deleted because it was not loaded.", databaseName);
+
+            configuration.DataConfig.DatabaseExists = false;
+            await configuration.SaveAsync(configuration.DataConfig);
+            await DeleteConfigurationFileAsync(configuration, databaseName);
+            DeleteDatabaseFolder(databaseName);
+
+            _statusMessage = $"Database '{databaseName}' deleted.";
+            await LoadDatabaseStatusesAsync();
+            EnsureSelection();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to delete database {DatabaseName}", databaseName);
+            _statusMessage = "Failed to delete database.";
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private async Task<bool> IsDatabasePersistedAsCreatedAsync(string databaseName)
+    {
+        var configuration = await LoadConfigurationAsync(databaseName);
+        if (_loadedDatabaseNames.Contains(databaseName))
+            return true;
+
+        if (configuration is null)
+            return false;
+
+        return configuration.DataConfig.DatabaseExists;
+    }
+
+    private static string NormalizeDatabaseName(string? databaseName)
+        => string.IsNullOrWhiteSpace(databaseName) ? string.Empty : databaseName.Trim();
+
+    private static bool ConfigurationFileExists(RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration configuration)
+    {
+        var configurationDirectory = configuration.DataConfig.ConfigurationDirectory;
+        var configurationFile = configuration.DataConfig.ConfigurationFile;
+        var configurationPath = System.IO.Path.Combine(configurationDirectory, configurationFile);
+        return System.IO.File.Exists(configurationPath);
+    }
+}

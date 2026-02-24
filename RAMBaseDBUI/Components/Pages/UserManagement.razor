@@ -1,0 +1,325 @@
+@page "/user-management"
+@using System.IO
+@using System.Linq
+@using RAMBaseDB.Application
+@using RAMBaseDB.Domain.Entities
+@inject ILogger<UserManagement> Logger
+
+<PageTitle>User Management</PageTitle>
+
+<section class="user-management">
+    <header class="user-management__header">
+        <p class="label">Access control</p>
+        <h1>User Management</h1>
+        <p>
+            Create initial administrator accounts for your RAMBase database instances. User definitions are persisted
+            as individual JSON files inside the <code>@GetUserDirectory()</code> folder so they can be versioned or deployed
+            alongside the rest of your workspace configuration.
+        </p>
+    </header>
+
+    <div class="user-management__grid">
+        <section class="user-management__card">
+            <h2>New user</h2>
+            <p class="user-management__hint">
+                Provide the required profile, password, and database defaults, then select <strong>Save user</strong>.
+            </p>
+
+            <EditForm EditContext="_editContext" OnValidSubmit="HandleSaveAsync">
+                <DataAnnotationsValidator />
+
+                @if (_errors.Count > 0)
+                {
+                    <div class="user-management__alert user-management__alert--error">
+                        <strong>Validation</strong>
+                        <ul>
+                            @foreach (var error in _errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_statusMessage))
+                {
+                    <div class="user-management__alert user-management__alert--success">
+                        @_statusMessage
+                    </div>
+                }
+
+                <div class="user-form">
+                    <div class="form-field">
+                        <label for="user-id">User ID</label>
+                        <InputText id="user-id" class="form-input" @bind-Value="_draftUser.Id" />
+                    </div>
+
+                    <div class="form-field">
+                        <label for="user-name">Display name</label>
+                        <InputText id="user-name" class="form-input" @bind-Value="_draftUser.Name" />
+                    </div>
+
+                    <div class="form-field">
+                        <label for="user-db">Default database</label>
+                        <InputText id="user-db" class="form-input" @bind-Value="_draftUser.DefaultDatabase" />
+                    </div>
+
+                    <div class="form-field form-field--half">
+                        <label for="user-password">Password</label>
+                        <InputText id="user-password" class="form-input" @bind-Value="_draftUser.Password" type="password" />
+                    </div>
+
+                    <div class="form-field form-field--half">
+                        <label for="user-confirm">Confirm password</label>
+                        <InputText id="user-confirm" class="form-input" @bind-Value="_draftUser.ConfirmPassword" type="password" />
+                    </div>
+
+                    <div class="form-field form-field--inline">
+                        <InputCheckbox id="user-active" class="form-checkbox" @bind-Value="_draftUser.IsActive" />
+                        <label for="user-active">Active account</label>
+                    </div>
+
+                    <div class="form-field form-field--inline">
+                        <InputCheckbox id="user-change-password" class="form-checkbox" @bind-Value="_draftUser.UserMustChangePassword" />
+                        <label for="user-change-password">Require password change on next sign-in</label>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" disabled="@_isSaving">
+                        Save user
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="ResetDraftUser" disabled="@_isSaving">
+                        Clear form
+                    </button>
+                </div>
+            </EditForm>
+        </section>
+
+        <section class="user-management__card">
+            <div class="user-management__card-header">
+                <div>
+                    <h2>Saved users</h2>
+                    <p class="user-management__hint">
+                        Files are created beneath <code>@GetUserDirectory()</code> and can be moved into source control.
+                    </p>
+                </div>
+
+                <button type="button" class="btn btn-tertiary" @onclick="LoadSavedUsersAsync" disabled="@_isSaving">
+                    Refresh list
+                </button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_loadError))
+            {
+                <div class="user-management__alert user-management__alert--error">
+                    @_loadError
+                </div>
+            }
+            else if (_savedUsers.Count == 0)
+            {
+                <p class="user-management__empty">No users have been saved yet.</p>
+            }
+            else
+            {
+                <ul class="user-management__list">
+                    @foreach (var user in _savedUsers)
+                    {
+                        <li>
+                            <div>
+                                <p class="user-management__list-name">@user.Name</p>
+                                <small>@user.Id</small>
+                                <p class="user-management__list-meta">
+                                    Default DB: <strong>@user.DefaultDatabase</strong> &middot;
+                                    @(user.IsActive ? "Active" : "Inactive") &middot;
+                                    @(user.MustChangePassword ? "Must reset password" : "Password OK")
+                                </p>
+                            </div>
+                            <div class="user-management__list-file">
+                                <code>@user.FileName</code>
+                                <small>Updated @user.LastModified.ToString("g")</small>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
+</section>
+
+@code {
+    private readonly List<string> _errors = new();
+    private string? _statusMessage;
+    private string? _loadError;
+    private bool _isSaving;
+    private EditContext _editContext = default!;
+    private User _draftUser = default!;
+    private IReadOnlyList<SavedUserSummary> _savedUsers = Array.Empty<SavedUserSummary>();
+
+    private sealed record SavedUserSummary(
+        string Id,
+        string Name,
+        string DefaultDatabase,
+        bool IsActive,
+        bool MustChangePassword,
+        string FileName,
+        DateTime LastModified
+    );
+
+    protected override void OnInitialized()
+    {
+        InitializeDraftUser();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSavedUsersAsync();
+    }
+
+    private async Task HandleSaveAsync()
+    {
+        if (_isSaving)
+            return;
+
+        _isSaving = true;
+        _errors.Clear();
+        _statusMessage = null;
+
+        try
+        {
+            using var manager = new UserManager(
+                _draftUser.Id,
+                _draftUser.Name,
+                _draftUser.Password,
+                _draftUser.ConfirmPassword,
+                _draftUser.DefaultDatabase,
+                _draftUser.UserMustChangePassword,
+                _draftUser.IsActive);
+
+            User validatedUser;
+
+            try
+            {
+                validatedUser = manager.Create();
+            }
+            catch (Exception validationException)
+            {
+                _errors.Add(validationException.Message);
+                Logger.LogWarning(validationException, "Failed to validate user {UserId}", _draftUser.Id);
+                return;
+            }
+
+            var filePath = BuildUserFilePath(validatedUser.Id);
+            await Task.Run(() => manager.SaveUser(filePath));
+
+            _statusMessage = $"Saved {validatedUser.Name} ({validatedUser.Id})";
+
+            await LoadSavedUsersAsync();
+            ResetDraftUser();
+        }
+        catch (Exception exception)
+        {
+            _errors.Add("Unable to save the user. Check the server logs for more details.");
+            Logger.LogError(exception, "Unexpected failure while saving user {UserId}", _draftUser.Id);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task LoadSavedUsersAsync()
+    {
+        try
+        {
+            _loadError = null;
+
+            var directory = GetUserDirectory();
+            var summaries = await Task.Run(() =>
+            {
+                var items = new List<SavedUserSummary>();
+
+                if (!Directory.Exists(directory))
+                    return (IReadOnlyList<SavedUserSummary>)items;
+
+                foreach (var file in Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly))
+                {
+                    try
+                    {
+                        var user = UserManager.LoadUser(file);
+                        var info = new FileInfo(file);
+                        items.Add(new SavedUserSummary(
+                            user.Id,
+                            user.Name,
+                            user.DefaultDatabase,
+                            user.IsActive,
+                            user.UserMustChangePassword,
+                            info.Name,
+                            info.LastWriteTime));
+                    }
+                    catch (Exception loadException)
+                    {
+                        Logger.LogWarning(loadException, "Failed to load stored user from {File}", file);
+                    }
+                }
+
+                return (IReadOnlyList<SavedUserSummary>)items
+                    .OrderBy(user => user.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(user => user.Id, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            });
+
+            _savedUsers = summaries;
+        }
+        catch (Exception exception)
+        {
+            _loadError = "Unable to read saved users.";
+            _savedUsers = Array.Empty<SavedUserSummary>();
+            Logger.LogError(exception, "Failed to enumerate saved users.");
+        }
+    }
+
+    private void ResetDraftUser()
+    {
+        InitializeDraftUser();
+    }
+
+    private void InitializeDraftUser()
+    {
+        _draftUser = CreateDefaultUser();
+        _editContext = new EditContext(_draftUser);
+    }
+
+    private static User CreateDefaultUser()
+        => new()
+        {
+            Id = string.Empty,
+            Name = string.Empty,
+            DefaultDatabase = string.Empty,
+            UserMustChangePassword = true,
+            IsActive = true
+        };
+
+    private static string GetUserDirectory()
+        => Path.Combine(Directory.GetCurrentDirectory(), "Users");
+
+    private static string BuildUserFilePath(string userId)
+    {
+        var sanitized = SanitizeFileName(userId);
+        var directory = GetUserDirectory();
+        return Path.Combine(directory, $"{sanitized}.json");
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Guid.NewGuid().ToString("N");
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var builder = new string(value.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim('_');
+
+        return builder.Length == 0
+            ? Guid.NewGuid().ToString("N")
+            : builder;
+    }
+}

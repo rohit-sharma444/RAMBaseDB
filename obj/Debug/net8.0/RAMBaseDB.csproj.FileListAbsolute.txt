@@ -1,0 +1,17 @@
+D:\DEVELOPMENT-WORK\INMEMORYDB\obj\Debug\net8.0\RAMBaseDB.csproj.AssemblyReference.cache
+D:\DEVELOPMENT-WORK\INMEMORYDB\obj\Debug\net8.0\RAMBaseDB.GeneratedMSBuildEditorConfig.editorconfig
+D:\DEVELOPMENT-WORK\INMEMORYDB\obj\Debug\net8.0\RAMBaseDB.AssemblyInfoInputs.cache
+D:\DEVELOPMENT-WORK\INMEMORYDB\obj\Debug\net8.0\RAMBaseDB.AssemblyInfo.cs
+D:\DEVELOPMENT-WORK\INMEMORYDB\obj\Debug\net8.0\RAMBaseDB.csproj.CoreCompileInputs.cache
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\RAMBaseDB.csproj.AssemblyReference.cache
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\RAMBaseDB.GeneratedMSBuildEditorConfig.editorconfig
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\RAMBaseDB.AssemblyInfoInputs.cache
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\RAMBaseDB.AssemblyInfo.cs
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\RAMBaseDB.csproj.CoreCompileInputs.cache
+D:\DEVELOPMENT-WORK\RAMBaseDB\bin\Debug\net8.0\RAMBaseDB.deps.json
+D:\DEVELOPMENT-WORK\RAMBaseDB\bin\Debug\net8.0\RAMBaseDB.dll
+D:\DEVELOPMENT-WORK\RAMBaseDB\bin\Debug\net8.0\RAMBaseDB.pdb
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\RAMBaseDB.dll
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\refint\RAMBaseDB.dll
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\RAMBaseDB.pdb
+D:\DEVELOPMENT-WORK\RAMBaseDB\obj\Debug\net8.0\ref\RAMBaseDB.dll

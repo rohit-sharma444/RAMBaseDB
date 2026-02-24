@@ -1,0 +1,938 @@
+@page "/table-creation"
+@using System.IO
+@using System.Text.Json
+@using RAMBaseDB.Domain.Metadata
+@using RAMBaseDB.Infrastructure.Services
+@inject RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration ConfigurationStore
+@inject ITableMetadataStorage MetadataStorage
+@inject ILogger<TableCreation> Logger
+@inject NavigationManager Navigation
+
+<PageTitle>Table Creation</PageTitle>
+
+<section class="table-creation">
+    <header class="table-creation__lead">
+        <div class="table-creation__lead-top">
+            <p class="label">Schema design</p>
+            <button type="button"
+                    class="table-creation__back-button"
+                    @onclick="NavigateToMainMenu">
+                Back to main menu
+            </button>
+        </div>
+        <h1>Table creation workspace</h1>
+        <p>
+            Work through the guided steps to select a database, name your table, and capture each field with
+            its required properties. Everything you enter is reflected instantly in the schema tree.
+        </p>
+    </header>
+
+    <div class="table-creation__actions">
+        <article class="action-card">
+            <p class="label">Step 1</p>
+            <h2>Select a database</h2>
+            <p>Pick the database that will receive the new table definition.</p>
+
+            <div class="form-control">
+                <label for="database-select">Database</label>
+                <InputSelect id="database-select"
+                             class="select"
+                             @bind-Value="SelectedDatabase"
+                             disabled="@(_databaseOptions.Count == 0)">
+                    <option value="">Select a database</option>
+                    @foreach (var database in _databaseOptions)
+                    {
+                        <option value="@database">@database</option>
+                    }
+                </InputSelect>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_databaseStatusMessage))
+            {
+                <p class="action-card__status">@_databaseStatusMessage</p>
+            }
+            else if (_databaseOptions.Count == 0)
+            {
+                <p class="action-card__status">No configuration files detected.</p>
+            }
+            else if (string.IsNullOrWhiteSpace(_selectedDatabase))
+            {
+                <p class="action-card__status">Select a database to begin.</p>
+            }
+            else
+            {
+                <p class="action-card__status">Currently designing for @_selectedDatabase.</p>
+            }
+
+            <button type="button"
+                    @onclick="LoadTablesFromMetadataAsync"
+                    disabled="@(!HasDatabaseSelection || _isLoadingTables)">
+                @(_isLoadingTables ? "Loading tables..." : "Load tables")
+            </button>
+
+            @if (!string.IsNullOrWhiteSpace(_loadStatusMessage))
+            {
+                <p class="action-card__status">@_loadStatusMessage</p>
+            }
+        </article>
+
+        <article class="action-card">
+            <p class="label">Step 2</p>
+            <h2>Name the table</h2>
+            <p>Provide a table name for the selected database.</p>
+
+            <div class="form-control">
+                <label for="new-table-name">Table name</label>
+                <InputText id="new-table-name"
+                           @bind-Value="_newTableName"
+                           placeholder="e.g. Customers"
+                           disabled="@(!HasDatabaseSelection)" />
+            </div>
+
+            <button type="button"
+                    @onclick="AddTable"
+                    disabled="@(string.IsNullOrWhiteSpace(_newTableName) || !HasDatabaseSelection)">
+                Add table
+            </button>
+
+            @if (!HasDatabaseSelection)
+            {
+                <p class="action-card__status">Select a database first.</p>
+            }
+            else
+            {
+                <p class="action-card__status">Tables are scoped per database.</p>
+            }
+        </article>
+
+        <article class="action-card action-card--field">
+            <p class="label">Step 3</p>
+            <h2>Define table fields</h2>
+            <p>Choose a target table and describe each field's metadata.</p>
+
+            @{
+                var hasFieldTarget = ResolveTable(_fieldTargetTableId) is not null;
+                var fieldSupportsLength = SupportsLength(_fieldDraft.DataType);
+            }
+
+            <div class="form-control">
+                <label for="field-table">Target table</label>
+                <InputSelect id="field-table"
+                             class="select"
+                             @bind-Value="_fieldTargetTableId"
+                             disabled="@(!CanSelectFieldTarget)">
+                    <option value="">Select a table</option>
+                    @foreach (var table in _tables)
+                    {
+                        <option value="@table.Id">@table.Name</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-control">
+                    <label for="new-field-name">Field name</label>
+                    <InputText id="new-field-name"
+                               @bind-Value="_fieldDraft.Name"
+                               placeholder="e.g. EmailAddress"
+                               disabled="@(!hasFieldTarget)" />
+                </div>
+
+                <div class="form-control">
+                    <label for="new-field-type">Data type</label>
+                    <InputSelect id="new-field-type"
+                                 @bind-Value="_fieldDraft.DataType"
+                                 disabled="@(!hasFieldTarget)">
+                        @foreach (var option in _dataTypes)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="form-control">
+                    <label for="new-field-length">Length / size</label>
+                    @if (!hasFieldTarget)
+                    {
+                        <input id="new-field-length"
+                               class="form-control__readonly"
+                               value="Select a table"
+                               disabled />
+                    }
+                    else if (fieldSupportsLength)
+                    {
+                        <InputNumber id="new-field-length"
+                                     @bind-Value="_fieldDraft.Length" />
+                    }
+                    else
+                    {
+                        <input id="new-field-length"
+                               class="form-control__readonly"
+                               value="Not applicable"
+                               disabled />
+                    }
+                </div>
+            </div>
+
+            <div class="field-card__toggles">
+                <label class="toggle">
+                    <InputCheckbox @bind-Value="_fieldDraft.AllowBlank" disabled="@(!hasFieldTarget)" />
+                    Allow blank values
+                </label>
+
+                <label class="toggle">
+                    <InputCheckbox @bind-Value="_fieldDraft.AutoGenerated" disabled="@(!hasFieldTarget)" />
+                    Auto generate value
+                </label>
+            </div>
+
+            <button type="button"
+                    @onclick="AddField"
+                    disabled="@(!CanAddField)">
+                Attach field
+            </button>
+
+            @if (!HasDatabaseSelection)
+            {
+                <p class="action-card__status">Select a database before defining fields.</p>
+            }
+            else if (_tables.Count == 0)
+            {
+                <p class="action-card__status">Add a table to enable field entry.</p>
+            }
+            else
+            {
+                <p class="action-card__status">Fields appear immediately in the tree.</p>
+            }
+        </article>
+
+        <article class="action-card action-card--save">
+            <p class="label">Step 4</p>
+            <h2>Save table metadata</h2>
+            <p>Persist every designed table as JSON files under the Metadata folder.</p>
+
+            <button type="button"
+                    @onclick="SaveTablesAsync"
+                    disabled="@(!CanSaveTables)">
+                @(_isSaving ? "Saving..." : "Save tables")
+            </button>
+
+            @if (_isSaving)
+            {
+                <p class="action-card__status">Writing table metadata...</p>
+            }
+            else if (!HasDatabaseSelection)
+            {
+                <p class="action-card__status">Select a database before saving.</p>
+            }
+            else if (_tables.Count == 0)
+            {
+                <p class="action-card__status">Add at least one table to enable saving.</p>
+            }
+            else if (!string.IsNullOrWhiteSpace(_saveStatusMessage))
+            {
+                <p class="action-card__status">@_saveStatusMessage</p>
+            }
+            else
+            {
+                <p class="action-card__status">Files are written to Metadata/@_selectedDatabase/Tables.</p>
+            }
+        </article>
+    </div>
+
+    <div class="table-creation__workspace">
+        <section class="table-tree">
+            <div class="table-tree__header">
+                <div>
+                    <p class="label">Schema explorer</p>
+                    <h2>Database tree</h2>
+                    <p class="table-tree__database">@GetDatabaseDisplayText()</p>
+                </div>
+                <small>@(HasDatabaseSelection ? $"{_tables.Count} table(s)" : "Waiting for selection")</small>
+            </div>
+
+            @if (!HasDatabaseSelection)
+            {
+                <p class="table-tree__empty">
+                    Choose a database to view or design its tables.
+                </p>
+            }
+            else if (_tables.Count == 0)
+            {
+                <p class="table-tree__empty">
+                    No tables have been defined yet. Use the steps above to add your first table.
+                </p>
+            }
+            else
+            {
+                <ul class="table-tree__list tree-view">
+                    @foreach (var table in _tables)
+                    {
+                        var nodeClass = table.IsExpanded ? "table-node is-expanded" : "table-node is-collapsed";
+                        <li class="@nodeClass">
+                            <div class="table-node__header">
+                                <button type="button"
+                                        class="table-node__toggle"
+                                        aria-label="@GetToggleLabel(table)"
+                                        aria-expanded="@table.IsExpanded"
+                                        @onclick="() => ToggleTableNode(table)">
+                                    <span aria-hidden="true">@GetToggleIcon(table)</span>
+                                </button>
+
+                                <button type="button"
+                                        class="table-node__title @(table == _selectedTable ? "is-active" : string.Empty)"
+                                        @onclick="() => SelectTable(table)">
+                                    <span>
+                                        @table.Name
+                                        <small>@table.Fields.Count field(s)</small>
+                                    </span>
+                                </button>
+
+                                <button type="button"
+                                        class="table-node__delete"
+                                        aria-label="Delete table @table.Name"
+                                        @onclick="() => RemoveTable(table)">
+                                    Delete
+                                </button>
+                            </div>
+
+                            @if (!table.IsExpanded)
+                            {
+                                <p class="table-node__collapsed-hint">Collapsed. Expand to inspect fields.</p>
+                            }
+                            else if (table.Fields.Count == 0)
+                            {
+                                <p class="table-node__empty">No fields yet.</p>
+                            }
+                            else
+                            {
+                                <ul class="tree-view tree-view--fields">
+                                    @foreach (var field in table.Fields)
+                                    {
+                                        var isSelected = _selectedField == field;
+                                        <li class="field-node @(isSelected ? "is-selected" : string.Empty)">
+                                            <button type="button" @onclick="() => SelectField(table, field)">
+                                                <span class="field-node__info">
+                                                    <span class="field-node__name">@field.Name</span>
+                                                    <span class="field-node__type">@DescribeField(field)</span>
+                                                </span>
+                                                <span class="field-node__badges">
+                                                    @if (field.AutoGenerated)
+                                                    {
+                                                        <span class="field-badge">Auto</span>
+                                                    }
+                                                    @if (field.AllowBlank)
+                                                    {
+                                                        <span class="field-badge field-badge--muted">Blank</span>
+                                                    }
+                                                </span>
+                                            </button>
+
+                                            <button type="button"
+                                                    class="field-node__delete"
+                                                    aria-label="Delete field @field.Name from @table.Name"
+                                                    @onclick="() => RemoveField(table, field)">
+                                                Delete
+                                            </button>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="properties-panel">
+            <div class="properties-panel__header">
+                <p class="label">Field properties</p>
+                <h2>@(HasDatabaseSelection ? (_selectedField?.Name ?? "Select a field") : "Awaiting database selection")</h2>
+            </div>
+
+            @if (!HasDatabaseSelection)
+            {
+                <p class="properties-panel__empty">
+                    Select a database to start editing tables and fields.
+                </p>
+            }
+            else if (_selectedField is null)
+            {
+                <p class="properties-panel__empty">
+                    Choose a field from the tree to edit its metadata. Field properties update in real time.
+                </p>
+            }
+            else
+            {
+                <EditForm Model="_selectedField">
+                    <div class="properties-panel__form">
+                        <div class="form-control">
+                            <label for="field-name-input">Field name</label>
+                            <InputText id="field-name-input" @bind-Value="_selectedField.Name" />
+                        </div>
+
+                        <div class="form-control">
+                            <label for="field-type-input">Data type</label>
+                            <InputSelect id="field-type-input" @bind-Value="_selectedField.DataType">
+                                @foreach (var option in _dataTypes)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        @if (SupportsLength(_selectedField.DataType))
+                        {
+                            <div class="form-control">
+                                <label for="field-length-input">Length / size</label>
+                                <InputNumber id="field-length-input" @bind-Value="_selectedField.Length" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="form-control form-control--readonly">
+                                <label>Length / size</label>
+                                <input value="Not applicable for @_selectedField.DataType" disabled />
+                            </div>
+                        }
+
+                        <label class="toggle">
+                            <InputCheckbox @bind-Value="_selectedField.AllowBlank" />
+                            Allow blank values
+                        </label>
+
+                        <label class="toggle">
+                            <InputCheckbox @bind-Value="_selectedField.AutoGenerated" />
+                            Auto generate value
+                        </label>
+                    </div>
+                </EditForm>
+
+                <div class="properties-panel__actions">
+                    <button type="button"
+                            class="properties-panel__delete"
+                            @onclick="RemoveSelectedField">
+                        Remove field
+                    </button>
+                </div>
+
+                <div class="properties-panel__summary">
+                    <h3>Quick summary</h3>
+                    <dl>
+                        <div>
+                            <dt>Database</dt>
+                            <dd>@GetDatabaseDisplayText()</dd>
+                        </div>
+                        <div>
+                            <dt>Table</dt>
+                            <dd>@_selectedTable?.Name</dd>
+                        </div>
+                        <div>
+                            <dt>Data type</dt>
+                            <dd>@_selectedField.DataType</dd>
+                        </div>
+                        <div>
+                            <dt>Length</dt>
+                            <dd>@(_selectedField.Length > 0 ? _selectedField.Length : "n/a")</dd>
+                        </div>
+                        <div>
+                            <dt>Allows blank</dt>
+                            <dd>@(_selectedField.AllowBlank ? "Yes" : "No")</dd>
+                        </div>
+                        <div>
+                            <dt>Auto-generated</dt>
+                            <dd>@(_selectedField.AutoGenerated ? "Yes" : "No")</dd>
+                        </div>
+                    </dl>
+                </div>
+            }
+        </section>
+    </div>
+</section>
+
+@code {
+    private readonly Dictionary<string, List<TableDefinition>> _tablesByDatabase = new(StringComparer.OrdinalIgnoreCase);
+    private List<TableDefinition> _tables = new();
+    private static readonly JsonSerializerOptions MetadataSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true
+    };
+    private readonly string[] _dataTypes = new[]
+    {
+        "INT",
+        "BIGINT",
+        "DECIMAL",
+        "BIT",
+        "DATE",
+        "DATETIME",
+        "NVARCHAR",
+        "VARCHAR",
+        "UNIQUEIDENTIFIER"
+    };
+
+    private IReadOnlyList<string> _databaseOptions = Array.Empty<string>();
+    private string _selectedDatabase = string.Empty;
+    private string? _databaseStatusMessage;
+    private string _newTableName = string.Empty;
+    private Guid? _fieldTargetTableId;
+    private TableDefinition? _selectedTable;
+    private FieldDefinition? _selectedField;
+    private FieldDraft _fieldDraft = new();
+    private bool _isSaving;
+    private string? _saveStatusMessage;
+    private bool _isLoadingTables;
+    private string? _loadStatusMessage;
+
+    private string? SelectedDatabase
+    {
+        get => _selectedDatabase;
+        set => SetSelectedDatabase(value);
+    }
+
+    private bool HasDatabaseSelection => !string.IsNullOrWhiteSpace(_selectedDatabase);
+    private bool CanSelectFieldTarget => HasDatabaseSelection && _tables.Count > 0;
+    private bool CanAddField => ResolveTable(_fieldTargetTableId) is not null
+        && !string.IsNullOrWhiteSpace(_fieldDraft.Name)
+        && HasDatabaseSelection;
+    private bool CanSaveTables => HasDatabaseSelection && _tables.Count > 0 && !_isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ResetFieldDraft();
+        await LoadDatabaseOptionsAsync();
+
+        if (_databaseOptions.Count == 1)
+            SetSelectedDatabase(_databaseOptions[0]);
+    }
+
+    private async Task LoadDatabaseOptionsAsync()
+    {
+        try
+        {
+            var entries = await ConfigurationStore.ListConfigurationsAsync();
+            var names = new List<string>();
+
+            foreach (var entry in entries)
+            {
+                var name = ExtractDatabaseName(entry);
+                if (!string.IsNullOrWhiteSpace(name))
+                    names.Add(name);
+            }
+
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+            _databaseOptions = names;
+            _databaseStatusMessage = names.Count == 0 ? "No configured databases were found." : null;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load configured databases for table creation.");
+            _databaseOptions = Array.Empty<string>();
+            _databaseStatusMessage = "Unable to load database names.";
+        }
+    }
+
+    private void SetSelectedDatabase(string? databaseName)
+    {
+        var normalized = string.IsNullOrWhiteSpace(databaseName)
+            ? string.Empty
+            : databaseName.Trim();
+
+        if (string.Equals(_selectedDatabase, normalized, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _selectedDatabase = normalized;
+        _saveStatusMessage = null;
+        _loadStatusMessage = null;
+
+        if (!HasDatabaseSelection)
+        {
+            _tables = new List<TableDefinition>();
+            _selectedTable = null;
+            _selectedField = null;
+            _fieldTargetTableId = null;
+            ResetFieldDraft();
+            return;
+        }
+
+        if (!_tablesByDatabase.TryGetValue(_selectedDatabase, out var tables))
+        {
+            tables = new List<TableDefinition>();
+            _tablesByDatabase[_selectedDatabase] = tables;
+        }
+
+        ApplyTablesForSelection(tables);
+    }
+
+    private void NavigateToMainMenu() => Navigation.NavigateTo("/");
+
+    private void ApplyTablesForSelection(List<TableDefinition> tables)
+    {
+        _tables = tables;
+        _selectedTable = _tables.FirstOrDefault();
+        _selectedField = _selectedTable?.Fields.FirstOrDefault();
+        _fieldTargetTableId = _selectedTable?.Id;
+        ResetFieldDraft();
+    }
+
+    private void ResetFieldDraft()
+    {
+        var defaultType = _dataTypes.First();
+        _fieldDraft = new FieldDraft
+        {
+            DataType = defaultType,
+            Length = SupportsLength(defaultType) ? 50 : 0
+        };
+    }
+
+    private void AddTable()
+    {
+        if (string.IsNullOrWhiteSpace(_newTableName) || !HasDatabaseSelection)
+            return;
+
+        var table = CreateTable(_newTableName.Trim(), Array.Empty<FieldDefinition>());
+        _tables.Add(table);
+        _newTableName = string.Empty;
+
+        SelectTable(table);
+    }
+
+    private void AddField()
+    {
+        if (!CanAddField)
+            return;
+
+        var table = ResolveTable(_fieldTargetTableId);
+        if (table is null)
+            return;
+
+        var dataType = string.IsNullOrWhiteSpace(_fieldDraft.DataType)
+            ? _dataTypes.First()
+            : _fieldDraft.DataType;
+
+        var field = new FieldDefinition
+        {
+            Name = _fieldDraft.Name.Trim(),
+            DataType = dataType,
+            Length = SupportsLength(dataType) ? Math.Max(1, _fieldDraft.Length) : 0,
+            AllowBlank = _fieldDraft.AllowBlank,
+            AutoGenerated = _fieldDraft.AutoGenerated
+        };
+
+        table.Fields.Add(field);
+        table.IsExpanded = true;
+
+        SelectField(table, field);
+        ResetFieldDraft();
+    }
+
+    private async Task LoadTablesFromMetadataAsync()
+    {
+        if (!HasDatabaseSelection || _isLoadingTables)
+            return;
+
+        var targetDatabase = _selectedDatabase!;
+        _isLoadingTables = true;
+        _loadStatusMessage = null;
+
+        try
+        {
+            var tablesDirectory = GetTablesDirectory(targetDatabase);
+            if (!Directory.Exists(tablesDirectory))
+            {
+                ReplaceTablesForDatabase(targetDatabase, new List<TableDefinition>());
+                SetLoadStatusForDatabase(targetDatabase, "No table metadata files were found.");
+                return;
+            }
+
+            var loadedTables = new List<TableDefinition>();
+            var files = Directory
+                .EnumerateFiles(tablesDirectory, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in files)
+            {
+                try
+                {
+                    await using var stream = File.OpenRead(file);
+                    var document = await JsonSerializer.DeserializeAsync<TableMetadataDocument>(stream, MetadataSerializerOptions);
+                    if (document is null || string.IsNullOrWhiteSpace(document.TableName))
+                        continue;
+
+                    var fields = (document.Fields ?? new List<FieldMetadataDocument>())
+                        .Where(fieldDocument => fieldDocument is not null)
+                        .Select(fieldDocument =>
+                        {
+                            var dataType = string.IsNullOrWhiteSpace(fieldDocument.DataType)
+                                ? _dataTypes.First()
+                                : fieldDocument.DataType.Trim();
+                            var length = SupportsLength(dataType)
+                                ? Math.Max(0, fieldDocument.Length)
+                                : 0;
+
+                            return new FieldDefinition
+                            {
+                                Name = fieldDocument.Name?.Trim() ?? string.Empty,
+                                DataType = dataType,
+                                Length = length,
+                                AllowBlank = fieldDocument.AllowBlank,
+                                AutoGenerated = fieldDocument.AutoGenerated
+                            };
+                        });
+
+                    loadedTables.Add(CreateTable(document.TableName.Trim(), fields));
+                }
+                catch (JsonException exception)
+                {
+                    Logger.LogWarning(exception, "Invalid table metadata JSON in {FilePath}", file);
+                }
+                catch (IOException exception)
+                {
+                    Logger.LogWarning(exception, "Failed to read table metadata file {FilePath}", file);
+                }
+            }
+
+            ReplaceTablesForDatabase(targetDatabase, loadedTables);
+
+            var statusMessage = loadedTables.Count == 0
+                ? "No table metadata files were found."
+                : $"Loaded {loadedTables.Count} table(s).";
+            SetLoadStatusForDatabase(targetDatabase, statusMessage);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load tables for {DatabaseName}", targetDatabase);
+            SetLoadStatusForDatabase(targetDatabase, "Unable to load tables. Check logs for details.");
+        }
+        finally
+        {
+            _isLoadingTables = false;
+        }
+    }
+
+    private void ReplaceTablesForDatabase(string databaseName, List<TableDefinition> tables)
+    {
+        _tablesByDatabase[databaseName] = tables;
+
+        if (string.Equals(_selectedDatabase, databaseName, StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyTablesForSelection(tables);
+        }
+    }
+
+    private void SetLoadStatusForDatabase(string databaseName, string message)
+    {
+        if (string.Equals(_selectedDatabase, databaseName, StringComparison.OrdinalIgnoreCase))
+        {
+            _loadStatusMessage = message;
+        }
+    }
+
+    private async Task SaveTablesAsync()
+    {
+        if (!HasDatabaseSelection || _tables.Count == 0 || _isSaving)
+            return;
+
+        _isSaving = true;
+        _saveStatusMessage = null;
+
+        try
+        {
+            var databaseName = _selectedDatabase!;
+            var documents = _tables
+                .Select(table => BuildTableMetadataDocument(databaseName, table))
+                .ToList();
+
+            var result = await MetadataStorage.ReplaceTablesAsync(databaseName, documents);
+            _saveStatusMessage = $"Saved {result.TablesWritten} table(s) to Metadata\\{databaseName}\\Tables.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to save table metadata for {DatabaseName}", _selectedDatabase);
+            _saveStatusMessage = "Failed to save table metadata. Check logs for details.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private TableDefinition? ResolveTable(Guid? tableId) =>
+        tableId is null ? null : _tables.FirstOrDefault(t => t.Id == tableId);
+
+    private void ToggleTableNode(TableDefinition table)
+    {
+        table.IsExpanded = !table.IsExpanded;
+    }
+
+    private static string GetToggleIcon(TableDefinition table) => table.IsExpanded ? "-" : "+";
+
+    private static string GetToggleLabel(TableDefinition table)
+        => table.IsExpanded ? $"Collapse {table.Name}" : $"Expand {table.Name}";
+
+    private void SelectTable(TableDefinition table)
+    {
+        _selectedTable = table;
+        _fieldTargetTableId = table.Id;
+        _selectedField = table.Fields.FirstOrDefault();
+    }
+
+    private void SelectField(TableDefinition table, FieldDefinition field)
+    {
+        _selectedTable = table;
+        _fieldTargetTableId = table.Id;
+        _selectedField = field;
+        table.IsExpanded = true;
+    }
+
+    private void RemoveSelectedField()
+    {
+        if (_selectedTable is null || _selectedField is null)
+            return;
+
+        RemoveField(_selectedTable, _selectedField);
+    }
+
+    private void RemoveTable(TableDefinition table)
+    {
+        var tableIndex = _tables.IndexOf(table);
+        if (tableIndex < 0)
+            return;
+
+        var removedSelectedTable = _selectedTable == table;
+        var removedFieldTarget = _fieldTargetTableId == table.Id;
+
+        _tables.RemoveAt(tableIndex);
+
+        if (_tables.Count == 0)
+        {
+            _selectedTable = null;
+            _selectedField = null;
+            _fieldTargetTableId = null;
+            return;
+        }
+
+        var fallbackTable = _tables[Math.Min(tableIndex, _tables.Count - 1)];
+        if (removedSelectedTable)
+        {
+            SelectTable(fallbackTable);
+        }
+        else if (removedFieldTarget)
+        {
+            _fieldTargetTableId = fallbackTable.Id;
+        }
+    }
+
+    private void RemoveField(TableDefinition table, FieldDefinition field)
+    {
+        var fieldIndex = table.Fields.IndexOf(field);
+        if (fieldIndex < 0)
+            return;
+
+        var wasSelectedTable = _selectedTable == table;
+        var wasSelectedField = _selectedField == field;
+
+        table.Fields.RemoveAt(fieldIndex);
+
+        if (wasSelectedTable)
+        {
+            if (table.Fields.Count == 0)
+            {
+                _selectedField = null;
+            }
+            else if (wasSelectedField)
+            {
+                var nextIndex = Math.Min(fieldIndex, table.Fields.Count - 1);
+                _selectedField = table.Fields[nextIndex];
+            }
+        }
+        else if (wasSelectedField)
+        {
+            _selectedField = null;
+        }
+    }
+
+    private static bool SupportsLength(string dataType)
+    {
+        if (string.IsNullOrWhiteSpace(dataType))
+            return false;
+
+        var normalized = dataType.ToUpperInvariant();
+        return normalized.Contains("CHAR", StringComparison.Ordinal)
+            || normalized is "DECIMAL" or "NUMERIC";
+    }
+
+    private static string DescribeField(FieldDefinition field)
+        => field.Length > 0 ? $"{field.DataType} ({field.Length})" : field.DataType;
+
+    private static TableDefinition CreateTable(string name, IEnumerable<FieldDefinition> fields)
+    {
+        var table = new TableDefinition { Name = name };
+        foreach (var field in fields)
+        {
+            table.Fields.Add(field);
+        }
+
+        return table;
+    }
+
+    private static string ExtractDatabaseName(string? entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry))
+            return string.Empty;
+
+        const string suffix = "-config";
+        return entry.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            ? entry[..^suffix.Length]
+            : entry;
+    }
+
+    private string GetDatabaseDisplayText()
+        => HasDatabaseSelection ? _selectedDatabase : "No database selected";
+
+    private static string GetTablesDirectory(string databaseName)
+        => Path.Combine(Directory.GetCurrentDirectory(), "Metadata", databaseName, "Tables");
+
+    private static TableMetadataDocument BuildTableMetadataDocument(string databaseName, TableDefinition table)
+        => new()
+        {
+            DatabaseName = databaseName,
+            TableName = table.Name,
+            Fields = table.Fields
+                .Select(field => new FieldMetadataDocument
+                {
+                    Name = field.Name,
+                    DataType = field.DataType,
+                    Length = field.Length,
+                    AllowBlank = field.AllowBlank,
+                    AutoGenerated = field.AutoGenerated
+                })
+                .ToList()
+        };
+
+    private sealed class TableDefinition
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+        public string Name { get; set; } = string.Empty;
+        public List<FieldDefinition> Fields { get; } = new();
+        public bool IsExpanded { get; set; } = true;
+    }
+
+    private sealed class FieldDefinition
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+        public string Name { get; set; } = string.Empty;
+        public string DataType { get; set; } = "INT";
+        public int Length { get; set; } = 0;
+        public bool AllowBlank { get; set; }
+        public bool AutoGenerated { get; set; }
+    }
+
+    private sealed class FieldDraft
+    {
+        public string Name { get; set; } = string.Empty;
+        public string DataType { get; set; } = string.Empty;
+        public int Length { get; set; }
+        public bool AllowBlank { get; set; }
+        public bool AutoGenerated { get; set; }
+    }
+}

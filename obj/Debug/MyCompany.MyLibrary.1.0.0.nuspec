@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>MyCompany.MyLibrary</id>
+    <version>1.0.0</version>
+    <authors>Rohit Sharma</authors>
+    <description>Library for RAM Base Database</description>
+    <tags>RAM Base Database</tags>
+    <repository type="git" url="https://github.com/mycompany/mylibrary" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="Microsoft.Extensions.Hosting" version="10.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Linq.Dynamic.Core" version="1.7.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="D:\DEVELOPMENT-WORK\RAMBaseDB\bin\Debug\net8.0\RAMBaseDB.dll" target="lib\net8.0\RAMBaseDB.dll" />
+  </files>
+</package>

@@ -1,0 +1,94 @@
+@page
+@model PayrollRazorApp.Pages.EmployeeRecords.IndexModel
+@{
+    ViewData["Title"] = "Employee Records";
+}
+
+<h1 class="display-6 mb-4">Employee Records</h1>
+<p class="text-muted">Log salary changes, bonuses, or other payroll impacting events for each employee.</p>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header">Latest records</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th scope="col">Effective</th>
+                            <th scope="col">Employee</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Amount</th>
+                            <th scope="col">Details</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.Records.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No employee records found.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var record in Model.Records)
+                            {
+                                <tr>
+                                    <td>@record.EffectiveDate.ToString("yyyy-MM-dd")</td>
+                                    <td>@(Model.EmployeeLookup.TryGetValue(record.EmployeeId, out var employee) ? employee : $"Employee #{record.EmployeeId}")</td>
+                                    <td>@record.RecordType</td>
+                                    <td>@record.Amount.ToString("C0")</td>
+                                    <td>@record.Details</td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header">New record</div>
+            <div class="card-body">
+                <form method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <div class="mb-3">
+                        <label asp-for="Input.EmployeeId" class="form-label"></label>
+                        <select asp-for="Input.EmployeeId" asp-items="Model.EmployeeOptions" class="form-select">
+                            <option value="">-- select employee --</option>
+                        </select>
+                        <span asp-validation-for="Input.EmployeeId" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.RecordType" class="form-label"></label>
+                        <input asp-for="Input.RecordType" class="form-control" />
+                        <span asp-validation-for="Input.RecordType" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Amount" class="form-label"></label>
+                        <input asp-for="Input.Amount" type="number" min="0" step="100" class="form-control" />
+                        <span asp-validation-for="Input.Amount" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.EffectiveDate" class="form-label"></label>
+                        <input asp-for="Input.EffectiveDate" type="date" class="form-control" />
+                        <span asp-validation-for="Input.EffectiveDate" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Details" class="form-label"></label>
+                        <textarea asp-for="Input.Details" rows="3" class="form-control"></textarea>
+                        <span asp-validation-for="Input.Details" class="text-danger"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save record</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

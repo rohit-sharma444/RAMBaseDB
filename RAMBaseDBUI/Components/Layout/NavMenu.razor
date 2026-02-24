@@ -1,0 +1,35 @@
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">RAMBaseDBUI</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-grid-nav-menu" aria-hidden="true"></span> Main Menu
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/database-configuration">
+                <span class="bi bi-database-nav-menu" aria-hidden="true"></span> Database Configuration
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/database-creation">
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Database Creation
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/user-management">
+                <span class="bi bi-user-nav-menu" aria-hidden="true"></span> User Management
+            </NavLink>
+        </div>
+    </nav>
+</div>

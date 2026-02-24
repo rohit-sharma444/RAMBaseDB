@@ -1,0 +1,12 @@
+{
+  "databaseName": "TestDB",
+  "databaseExists": true,
+  "configurationDirectory": "D:\\DEVELOPMENT-WORK\\RAMBaseDB\\RAMBaseDBUI\\Config",
+  "configurationFile": "TestDB-config.json",
+  "dumpDirectory": "D:\\Test",
+  "dumpFilePrefix": "dump",
+  "enableAutomaticSnapshots": true,
+  "snapshotInterval": "00:05:00",
+  "maxSnapshotHistory": 10,
+  "autoRestoreLatestDump": false
+}

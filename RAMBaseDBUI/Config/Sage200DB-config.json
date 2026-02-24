@@ -1,0 +1,12 @@
+{
+  "databaseName": "Sage200DB",
+  "databaseExists": true,
+  "configurationDirectory": "D:\\DEVELOPMENT-WORK\\RAMBaseDB\\RAMBaseDBUI\\Config",
+  "configurationFile": "Sage200DB-config.json",
+  "dumpDirectory": "D:\\Test",
+  "dumpFilePrefix": "dump",
+  "enableAutomaticSnapshots": true,
+  "snapshotInterval": "00:05:00",
+  "maxSnapshotHistory": 10,
+  "autoRestoreLatestDump": false
+}

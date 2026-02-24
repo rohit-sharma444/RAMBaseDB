@@ -1,0 +1,180 @@
+:root {
+    color-scheme: dark;
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.6;
+    --ram-bg: radial-gradient(circle at top, #0f172a, #020617 60%);
+    --ram-card: rgba(12, 18, 36, 0.85);
+    --ram-panel: rgba(15, 23, 42, 0.86);
+    --ram-border: rgba(148, 163, 184, 0.22);
+    --ram-highlight: #8b5cf6;
+    --ram-accent: #06b6d4;
+    --ram-success: #22c55e;
+    --ram-text: #e2e8f0;
+    --ram-muted: rgba(226, 232, 240, 0.7);
+    --ram-focus: 0 0 0 3px rgba(99, 102, 241, 0.35);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    padding: 0;
+    margin: 0;
+    min-height: 100%;
+    background: var(--ram-bg);
+    color: var(--ram-text);
+}
+
+body {
+    background-attachment: fixed;
+    letter-spacing: 0.01em;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(circle at 18% 25%, rgba(79, 70, 229, 0.25), transparent 40%),
+        radial-gradient(circle at 80% 0%, rgba(6, 182, 212, 0.2), transparent 45%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-weight: 600;
+    color: #fff;
+    margin-top: 0;
+}
+
+p {
+    color: var(--ram-muted);
+}
+
+a {
+    color: var(--ram-highlight);
+}
+
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: rgba(15, 23, 42, 0.7);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+:focus-visible {
+    outline: none;
+    box-shadow: var(--ram-focus);
+}
+
+.eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 0.72rem;
+    color: rgba(148, 163, 184, 0.9);
+    margin: 0 0 0.35rem;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    font-weight: 600;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+.btn-primary {
+    background: linear-gradient(120deg, var(--ram-highlight), var(--ram-accent));
+    color: #fff;
+    padding: 0.85rem 1.5rem;
+    border-radius: 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 12px 30px rgba(8, 47, 73, 0.45);
+}
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: var(--ram-text);
+    padding: 0.85rem 1.5rem;
+    border-radius: 0.85rem;
+    min-width: 8rem;
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.label--muted {
+    border-color: rgba(255, 255, 255, 0.1);
+    color: rgba(226, 232, 240, 0.8);
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    background: var(--ram-panel);
+    border: 1px solid var(--ram-border);
+    border-radius: 0.9rem;
+    padding: 0.85rem 1rem;
+    color: var(--ram-text);
+    font-size: 0.95rem;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: rgba(168, 85, 247, 0.7);
+    background: rgba(15, 23, 42, 0.92);
+    box-shadow: var(--ram-focus);
+}
+
+label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(226, 232, 240, 0.7);
+}
+
+.validation-message {
+    font-size: 0.8rem;
+    color: #fb7185;
+    margin-top: 0.25rem;
+}

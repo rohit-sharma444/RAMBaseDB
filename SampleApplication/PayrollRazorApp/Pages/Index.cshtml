@@ -1,0 +1,108 @@
+@page
+@model PayrollRazorApp.Pages.IndexModel
+@{
+    ViewData["Title"] = "Payroll workspace";
+}
+
+<div class="bg-light p-5 rounded mb-4">
+    <h1 class="display-5 fw-semibold">Payroll sample workspace</h1>
+    <p class="lead">This Razor Pages UI uses RAMBaseDB to keep an in-memory payroll database with master data, attendance, and employee record entry screens.</p>
+    <a class="btn btn-primary btn-lg" asp-page="/Employees/Index">Start with employees</a>
+</div>
+
+<div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
+    <div class="col">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-uppercase text-muted mb-1">Companies</p>
+                <h3 class="fw-semibold">@Model.CompanyCount</h3>
+                <a asp-page="/Companies/Index" class="stretched-link">Manage companies</a>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-uppercase text-muted mb-1">Departments</p>
+                <h3 class="fw-semibold">@Model.DepartmentCount</h3>
+                <a asp-page="/Departments/Index" class="stretched-link">Manage departments</a>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-uppercase text-muted mb-1">Employees</p>
+                <h3 class="fw-semibold">@Model.EmployeeCount</h3>
+                <a asp-page="/Employees/Index" class="stretched-link">Manage employees</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
+    <div class="col">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-uppercase text-muted mb-1">Attendance entries</p>
+                <h3 class="fw-semibold">@Model.AttendanceCount</h3>
+                <a asp-page="/Attendance/Index" class="stretched-link">Capture attendance</a>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-uppercase text-muted mb-1">Employee records</p>
+                <h3 class="fw-semibold">@Model.EmployeeRecordCount</h3>
+                <a asp-page="/EmployeeRecords/Index" class="stretched-link">Add records</a>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-uppercase text-muted mb-1">Quick links</p>
+                <ul class="list-unstyled mb-0">
+                    <li><a asp-page="/Companies/Index">Create a company</a></li>
+                    <li><a asp-page="/Departments/Index">Add a department</a></li>
+                    <li><a asp-page="/Employees/Index">Onboard an employee</a></li>
+                    <li><a asp-page="/Attendance/Index">Log attendance</a></li>
+                    <li><a asp-page="/EmployeeRecords/Index">Capture salary changes</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.FeaturedEmployees.Count > 0)
+{
+    <div class="card shadow-sm">
+        <div class="card-header">Recently active employees</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Employee</th>
+                            <th scope="col">Employee #</th>
+                            <th scope="col">Hire date</th>
+                            <th scope="col">Salary</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var employee in Model.FeaturedEmployees)
+                    {
+                        <tr>
+                            <td>@employee.FirstName @employee.LastName</td>
+                            <td>@employee.EmployeeNumber</td>
+                            <td>@employee.HireDate.ToString("yyyy-MM-dd")</td>
+                            <td>@employee.Salary.ToString("C0")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}

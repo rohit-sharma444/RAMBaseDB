@@ -1,0 +1,78 @@
+@page
+@model PayrollRazorApp.Pages.Companies.IndexModel
+@{
+    ViewData["Title"] = "Companies";
+}
+
+<h1 class="display-6 mb-4">Company Master</h1>
+<p class="text-muted">Track legal entities that own payroll obligations. Use the form below to add a new company.</p>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header">Registered companies</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Address</th>
+                            <th scope="col">Description</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.Companies.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">No companies have been added yet.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var company in Model.Companies)
+                            {
+                                <tr>
+                                    <td>@company.Name</td>
+                                    <td>@company.Address</td>
+                                    <td>@company.Description</td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header">Add company</div>
+            <div class="card-body">
+                <form method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Name" class="form-label"></label>
+                        <input asp-for="Input.Name" class="form-control" />
+                        <span asp-validation-for="Input.Name" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Address" class="form-label"></label>
+                        <input asp-for="Input.Address" class="form-control" />
+                        <span asp-validation-for="Input.Address" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Description" class="form-label"></label>
+                        <textarea asp-for="Input.Description" class="form-control" rows="3"></textarea>
+                        <span asp-validation-for="Input.Description" class="text-danger"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save company</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

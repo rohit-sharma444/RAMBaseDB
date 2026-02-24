@@ -1,0 +1,333 @@
+@page "/database-configuration"
+@inject NavigationManager Navigation
+@inject RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration ConfigurationStore
+@inject ILogger<DatabaseConfiguration> Logger
+@using BaseDatabaseConfigurationModel = RAMBaseDB.Domain.Configuration.DatabaseConfigurationModel;
+@using Microsoft.AspNetCore.WebUtilities;
+@using System.Linq;
+
+<PageTitle>Database Configuration</PageTitle>
+
+<section class="db-config">
+    <header class="db-config__header">
+        <div>
+            <p class="label">Workspace</p>
+            <h1>Database Configuration</h1>
+            <p>
+                Define the default connectivity, security, and operational behaviors that every new RAMBase
+                database should inherit. These values become the source of truth for downstream provisioning flows.
+            </p>
+        </div>
+
+        <div class="db-config__meta">
+            <button type="button" class="ghost-btn" @onclick="NavigateToMainMenu">
+                Back to Main Menu
+            </button>
+        </div>
+    </header>
+
+    <div class="db-config__content">
+        <EditForm Model="_configuration" OnValidSubmit="HandleValidSubmit" class="db-config__form">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            
+            @if (_statusMessage is not null)
+            {
+                <div class="status-pill">@_statusMessage</div>
+            }
+
+            <div class="form-grid">
+                <fieldset>
+                    <legend>Environment & Connectivity</legend>
+
+                    <div class="form-row">
+                        <label for="databaseName">Database Name</label>
+                        <InputText id="databaseName" @bind-Value="_configuration.DatabaseName"/>
+                    </div>
+
+                    <div class="form-row">
+                        <label for="dumpDirectory">Dump Directory</label>
+                        <InputText id="dumpDirectory" @bind-Value="_configuration.DumpDirectory">
+                        </InputText>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Database Identity</legend>
+                    <div class="form-row">
+                        <label for="dumpFilePrefix">Dump File Prefix</label>
+                        <InputText id="dumpFilePrefix" @bind-Value="_configuration.DumpFilePrefix" />
+                    </div>
+
+                    <legend>Database Identity</legend>
+                    <div class="form-row">
+                        <label for="enableAutomaticSnapshots">Enable Automatic Snapshots</label>
+                        <InputCheckbox id="enableAutomaticSnapshots" @bind-Value="_configuration.EnableAutomaticSnapshots" />
+                    </div>
+
+                    <div class="form-row">
+                        <label for="maxSnapshotHistory">Maximum Sanpshot History</label>
+                        <InputNumber id="maxSnapshotHistory" @bind-Value="_configuration.MaxSnapshotHistory" />
+                    </div>
+
+                    <div class="form-row">
+                        <label for="snapshotInterval">Snapshot Interval (minutes)</label>
+                        <InputNumber id="snapshotInterval" @bind-Value="SnapshotIntervalMinutes" />
+                    </div>
+
+                    <div class="form-row">
+                        <label for="autoRestoreLatestDump">Auto Restore Latest Dump</label>
+                        <InputCheckbox id="autoRestoreLatestDump" @bind-Value="_configuration.AutoRestoreLatestDump" />
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="ghost-btn" @onclick="ResetForm">Reset</button>
+                <button type="button"
+                        class="danger-btn"
+                        @onclick="DeleteConfigurationAsync"
+                        disabled="@(_isDeleting || !CanDeleteConfiguration)">
+                        Delete Configuration
+                </button>
+                <button type="submit" class="primary-btn">Save Configuration</button>
+            </div>
+        </EditForm>
+    </div>
+</section>
+
+@code {
+
+
+
+    private sealed record CallConfiguration(string Name, string Trigger, string Status);
+
+    private readonly IReadOnlyList<string> _checklist = new[]
+    {
+        "Validate environment and region.",
+        "Confirm encryption and authentication.",
+        "Review admin credentials.",
+        "Schedule automated backups.",
+        "Capture rollout notes for audit."
+    };
+
+    private readonly IReadOnlyList<CallConfiguration> _callConfigurations = new[]
+    {
+        new CallConfiguration(
+            "Bootstrap Provisioning",
+            "Initial call that seeds schemas when a workspace is created.",
+            "Ready"),
+        new CallConfiguration(
+            "Snapshot Rotation",
+            "Nightly rotation job that enforces the snapshot interval and retention.",
+            "Scheduled"),
+        new CallConfiguration(
+            "Failover Warmup",
+            "Dry-run restore that keeps disaster recovery targets primed.",
+            "Standby")
+    };
+
+    private DatabaseConfigurationModel _configuration = new();
+    private string? _statusMessage;
+    private IReadOnlyList<string> _availableConfigurations = System.Array.Empty<string>();
+    private bool _isDeleting;
+
+    private bool CanDeleteConfiguration
+        => !_configuration.DatabaseExists && HasSavedConfiguration(_configuration.DatabaseName);
+
+    protected override async Task OnInitializedAsync()
+    {
+        ApplyRequestedConfiguration();
+        _configuration = await LoadConfigurationAsync();
+        await LoadAvailableConfigurationsAsync();
+    }
+
+    private int SnapshotIntervalMinutes
+    {
+        get => (int)Math.Max(1, _configuration.SnapshotInterval.TotalMinutes);
+        set
+        {
+            var minutes = Math.Max(1, value);
+            _configuration.SnapshotInterval = TimeSpan.FromMinutes(minutes);
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            await ConfigurationStore.SaveAsync(_configuration);
+            await ResetForm();
+            _statusMessage = "Configuration saved.";
+            Navigation.NavigateTo("/");
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to persist database configuration.");
+            _statusMessage = "Failed to save configuration.";
+        }
+    }
+
+    private async Task ResetForm()
+    {
+        _configuration = await LoadConfigurationAsync();
+        await LoadAvailableConfigurationsAsync();
+        _statusMessage = null;
+    }
+
+    private async Task DeleteConfigurationAsync()
+    {
+        if (_isDeleting)
+            return;
+
+        var databaseName = _configuration.DatabaseName?.Trim();
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            _statusMessage = "Select a saved configuration to delete.";
+            return;
+        }
+
+        if (!HasSavedConfiguration(databaseName))
+        {
+            _statusMessage = $"Configuration '{databaseName}' was not found.";
+            return;
+        }
+
+        _isDeleting = true;
+
+        try
+        {
+            await ConfigurationStore.DeleteAsync(databaseName);
+            await ResetForm();
+            _statusMessage = $"Configuration '{databaseName}' deleted.";
+            Navigation.NavigateTo("/");
+        }
+        catch (InvalidOperationException exception)
+        {
+            Logger.LogWarning(exception, "Deletion blocked for database configuration {DatabaseName}", databaseName);
+            _statusMessage = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to delete database configuration {DatabaseName}", databaseName);
+            _statusMessage = "Failed to delete configuration.";
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private void NavigateToMainMenu() => Navigation.NavigateTo("/");
+
+    private void ApplyRequestedConfiguration()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (string.IsNullOrEmpty(uri.Query))
+            return;
+
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (!query.TryGetValue("database", out var requestedDatabase))
+            return;
+
+        var databaseName = requestedDatabase.ToString();
+        if (string.IsNullOrWhiteSpace(databaseName))
+            return;
+
+        ConfigurationStore.DataConfig.DatabaseName = databaseName;
+    }
+
+    private async Task<DatabaseConfigurationModel> LoadConfigurationAsync()
+    {
+        try
+        {
+            var loaded = await ConfigurationStore.LoadAsync();
+            var uiModel = AdaptToUiModel(loaded);
+            return NormalizeConfiguration(uiModel);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load database configuration.");
+            _statusMessage = "Unable to load saved configuration. Defaults applied.";
+            return new DatabaseConfigurationModel();
+        }
+    }
+
+    private static DatabaseConfigurationModel AdaptToUiModel(BaseDatabaseConfigurationModel? source)
+    {
+        if (source is DatabaseConfigurationModel uiModel)
+            return uiModel;
+
+        if (source is null)
+            return new DatabaseConfigurationModel();
+
+        return new DatabaseConfigurationModel
+        {
+            DatabaseName = source.DatabaseName ?? string.Empty,
+            DumpDirectory = source.DumpDirectory ?? string.Empty,
+            DumpFilePrefix = source.DumpFilePrefix,
+            EnableAutomaticSnapshots = source.EnableAutomaticSnapshots,
+            SnapshotInterval = source.SnapshotInterval,
+            MaxSnapshotHistory = source.MaxSnapshotHistory,
+            AutoRestoreLatestDump = source.AutoRestoreLatestDump
+        };
+    }
+
+    private static DatabaseConfigurationModel NormalizeConfiguration(DatabaseConfigurationModel? configuration)
+    {
+        var model = configuration ?? new DatabaseConfigurationModel();
+
+        if (model.SnapshotInterval <= TimeSpan.Zero)
+            model.SnapshotInterval = TimeSpan.FromMinutes(5);
+
+        if (model.MaxSnapshotHistory <= 0)
+            model.MaxSnapshotHistory = 10;
+
+        return model;
+    }
+
+    private async Task LoadAvailableConfigurationsAsync()
+    {
+        try
+        {
+            var configurations = await ConfigurationStore.ListConfigurationsAsync();
+            _availableConfigurations = configurations
+                .Select(ExtractDatabaseName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to list available database configurations.");
+            _availableConfigurations = System.Array.Empty<string>();
+        }
+    }
+
+    private static string ExtractDatabaseName(string? entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry))
+            return string.Empty;
+
+        const string suffix = "-config";
+        return entry.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            ? entry[..^suffix.Length]
+            : entry;
+    }
+
+    private bool HasSavedConfiguration(string? databaseName)
+    {
+        if (string.IsNullOrWhiteSpace(databaseName))
+            return false;
+
+        var candidate = databaseName.Trim();
+        foreach (var configuration in _availableConfigurations)
+        {
+            if (string.Equals(configuration, candidate, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+}

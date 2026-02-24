@@ -1,0 +1,80 @@
+@page
+@model PayrollRazorApp.Pages.Departments.IndexModel
+@{
+    ViewData["Title"] = "Departments";
+}
+
+<h1 class="display-6 mb-4">Department Master</h1>
+<p class="text-muted">Departments link employees back to their cost centers. Choose a company and describe the org unit.</p>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header">Departments</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                        <tr>
+                            <th scope="col">Department</th>
+                            <th scope="col">Company</th>
+                            <th scope="col">Description</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.Departments.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">No departments yet.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var department in Model.Departments)
+                            {
+                                <tr>
+                                    <td>@department.Name</td>
+                                    <td>@(Model.CompanyLookup.TryGetValue(department.CompanyId, out var company) ? company : $"Company #{department.CompanyId}")</td>
+                                    <td>@department.Description</td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header">Add department</div>
+            <div class="card-body">
+                <form method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Name" class="form-label"></label>
+                        <input asp-for="Input.Name" class="form-control" />
+                        <span asp-validation-for="Input.Name" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.CompanyId" class="form-label"></label>
+                        <select asp-for="Input.CompanyId" asp-items="Model.CompanyOptions" class="form-select">
+                            <option value="">-- select company --</option>
+                        </select>
+                        <span asp-validation-for="Input.CompanyId" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Description" class="form-label"></label>
+                        <textarea asp-for="Input.Description" rows="3" class="form-control"></textarea>
+                        <span asp-validation-for="Input.Description" class="text-danger"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save department</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

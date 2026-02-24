@@ -1,0 +1,501 @@
+@page "/table-upload"
+@using System.IO
+@using System.Linq
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using RAMBaseDB.Domain.Metadata
+@using RAMBaseDB.Infrastructure.Services
+@inject RAMBaseDB.Infrastructure.Configuration.DatabaseConfiguration ConfigurationStore
+@inject ITableMetadataStorage MetadataStorage
+@inject ILogger<TableUpload> Logger
+@inject NavigationManager Navigation
+
+<PageTitle>Table Upload</PageTitle>
+
+<section class="table-upload">
+    <header class="table-upload__lead">
+        <div>
+            <p class="label">Metadata import</p>
+            <h1>Upload table definitions</h1>
+            <p>
+                Import pre-built table metadata JSON files instead of recreating each field by hand.
+                Select the target database, drop the files, and RAMBaseDB will register the tables under Metadata/&lt;database&gt;/Tables.
+            </p>
+        </div>
+        <button type="button" class="table-upload__back" @onclick="NavigateToMainMenu">
+            Back to main menu
+        </button>
+    </header>
+
+    <div class="table-upload__actions">
+        <article class="upload-card">
+            <p class="label">Step 1</p>
+            <h2>Select database</h2>
+            <p>Pick the workspace that should receive the uploaded table metadata.</p>
+
+            <div class="form-control">
+                <label for="upload-database-select">Database</label>
+                <InputSelect id="upload-database-select"
+                             class="select"
+                             @bind-Value="SelectedDatabase"
+                             disabled="@(!_databaseOptions.Any())">
+                    <option value="">Select a database</option>
+                    @foreach (var option in _databaseOptions)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_databaseStatusMessage))
+            {
+                <p class="upload-card__status">@_databaseStatusMessage</p>
+            }
+            else if (!HasDatabaseSelection)
+            {
+                <p class="upload-card__status">Choose a target database to proceed.</p>
+            }
+            else
+            {
+                <p class="upload-card__status">Tables will be uploaded to Metadata\@_selectedDatabase\Tables.</p>
+            }
+        </article>
+
+        <article class="upload-card">
+            <p class="label">Step 2</p>
+            <h2>Add table files</h2>
+            <p>Select one or more JSON files exported from your schema pipelines.</p>
+
+            <div class="form-control">
+                <label for="upload-file-input">Table metadata files</label>
+                <InputFile id="upload-file-input"
+                           @key="_filePickerVersion"
+                           OnChange="HandleFilesSelected"
+                           accept=".json"
+                           multiple
+                           disabled="@(!HasDatabaseSelection)" />
+            </div>
+
+            <small class="hint">
+                Each file must be JSON (&lt; @FormatSize(MaxUploadSizeBytes)). Fields should include Name + DataType.
+            </small>
+        </article>
+
+        <article class="upload-card">
+            <p class="label">Step 3</p>
+            <h2>Upload queue</h2>
+            <p>Review each table, resolve validation issues, then upload in one click.</p>
+
+            <div class="upload-summary">
+                <div>
+                    <p class="summary-label">Queued</p>
+                    <strong>@_pendingUploads.Count</strong>
+                </div>
+                <div>
+                    <p class="summary-label">Ready</p>
+                    <strong>@_pendingUploads.Count(upload => upload.CanUpload)</strong>
+                </div>
+                <div>
+                    <p class="summary-label">Completed</p>
+                    <strong>@_pendingUploads.Count(upload => upload.IsCompleted)</strong>
+                </div>
+            </div>
+
+            <div class="upload-card__actions">
+                <button type="button"
+                        class="btn-primary"
+                        @onclick="UploadTablesAsync"
+                        disabled="@(!CanUpload)">
+                    @(_isUploading ? "Uploading..." : "Upload tables")
+                </button>
+                <button type="button"
+                        class="btn-link"
+                        @onclick="ClearQueue"
+                        disabled="@(_pendingUploads.Count == 0)">
+                    Clear queue
+                </button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_uploadStatusMessage))
+            {
+                <p class="upload-card__status">@_uploadStatusMessage</p>
+            }
+            else if (!HasDatabaseSelection)
+            {
+                <p class="upload-card__status">Select a database to continue.</p>
+            }
+            else if (_pendingUploads.Count == 0)
+            {
+                <p class="upload-card__status">No files queued yet.</p>
+            }
+            else if (!CanUpload)
+            {
+                <p class="upload-card__status">Resolve invalid entries before uploading.</p>
+            }
+            else
+            {
+                <p class="upload-card__status">All set&mdash;click upload to persist the tables.</p>
+            }
+        </article>
+    </div>
+
+    <section class="upload-queue">
+        <div class="upload-queue__header">
+            <div>
+                <p class="label">Queued files</p>
+                <h2>@(_pendingUploads.Count == 0 ? "No files pending" : $"{_pendingUploads.Count} file(s) ready")</h2>
+            </div>
+
+            @if (_pendingUploads.Count > 0)
+            {
+                <small>Tables target @_selectedDatabase</small>
+            }
+            else
+            {
+                <small>Select metadata files to populate the queue.</small>
+            }
+        </div>
+
+        @if (_pendingUploads.Count == 0)
+        {
+            <p class="upload-queue__empty">
+                Drop one or more metadata files to see them listed here. Each file should describe a single table (DatabaseName, TableName, Fields[]).
+            </p>
+        }
+        else
+        {
+            <div class="upload-queue__table">
+                <div class="upload-queue__row upload-queue__row--header">
+                    <span>File</span>
+                    <span>Table</span>
+                    <span>Fields</span>
+                    <span>Status</span>
+                    <span>Actions</span>
+                </div>
+
+                @foreach (var item in _pendingUploads)
+                {
+                    var rowClass = item.Error is not null || (item.IsCompleted && !item.Succeeded)
+                        ? "upload-queue__row is-error"
+                        : item.Succeeded
+                            ? "upload-queue__row is-success"
+                            : "upload-queue__row";
+
+                    <div class="@rowClass">
+                        <div>
+                            <strong>@item.FileName</strong>
+                            <small>@FormatSize(item.SizeBytes)</small>
+                        </div>
+                        <div>
+                            <p class="table-name">@(!string.IsNullOrWhiteSpace(item.Document.TableName) ? item.Document.TableName : "(Missing)")</p>
+                            <small>@_selectedDatabase</small>
+                        </div>
+                        <div>
+                            <p>@item.FieldCount field(s)</p>
+                        </div>
+                        <div>
+                            @if (item.Error is not null)
+                            {
+                                <span class="status status--error">@item.Error</span>
+                            }
+                            else if (item.IsUploading)
+                            {
+                                <span class="status status--pending">Uploading…</span>
+                            }
+                            else if (item.IsCompleted)
+                            {
+                                <span class="status @(item.Succeeded ? "status--success" : "status--error")">
+                                    @(item.Succeeded ? "Uploaded" : item.StatusMessage ?? "Failed")
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="status status--pending">Ready</span>
+                            }
+                        </div>
+                        <div class="upload-queue__actions">
+                            <button type="button"
+                                    @onclick="() => RemoveUpload(item)"
+                                    disabled="@item.IsUploading">
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private const long MaxUploadSizeBytes = 512 * 1024;
+    private static readonly JsonSerializerOptions MetadataSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip
+    };
+
+    private IReadOnlyList<string> _databaseOptions = Array.Empty<string>();
+    private readonly List<UploadItem> _pendingUploads = new();
+    private string _selectedDatabase = string.Empty;
+    private string? _databaseStatusMessage;
+    private string? _uploadStatusMessage;
+    private bool _isUploading;
+    private int _filePickerVersion;
+
+    private string? SelectedDatabase
+    {
+        get => _selectedDatabase;
+        set => SetSelectedDatabase(value);
+    }
+
+    private bool HasDatabaseSelection => !string.IsNullOrWhiteSpace(_selectedDatabase);
+    private bool CanUpload => HasDatabaseSelection && _pendingUploads.Any(item => item.CanUpload) && !_isUploading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDatabaseOptionsAsync();
+    }
+
+    private async Task LoadDatabaseOptionsAsync()
+    {
+        try
+        {
+            var entries = await ConfigurationStore.ListConfigurationsAsync();
+            var options = entries
+                .Select(ExtractDatabaseName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            _databaseOptions = options;
+            _databaseStatusMessage = options.Length == 0
+                ? "No configuration files detected."
+                : null;
+
+            if (options.Length == 1)
+                SetSelectedDatabase(options[0]);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load database options for table upload.");
+            _databaseOptions = Array.Empty<string>();
+            _databaseStatusMessage = "Unable to read database configurations.";
+        }
+    }
+
+    private void SetSelectedDatabase(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Trim();
+
+        if (string.Equals(normalized, _selectedDatabase, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _selectedDatabase = normalized;
+        _uploadStatusMessage = null;
+
+        if (!HasDatabaseSelection)
+        {
+            _pendingUploads.Clear();
+        }
+    }
+
+    private async Task HandleFilesSelected(InputFileChangeEventArgs args)
+    {
+        if (!HasDatabaseSelection)
+            return;
+
+        foreach (var file in args.GetMultipleFiles())
+        {
+            var upload = new UploadItem
+            {
+                FileName = file.Name,
+                SizeBytes = file.Size
+            };
+
+            try
+            {
+                await using var stream = file.OpenReadStream(MaxUploadSizeBytes);
+                var document = await JsonSerializer.DeserializeAsync<TableMetadataDocument>(stream, MetadataSerializerOptions);
+
+                if (document is null)
+                {
+                    upload.Error = "No table definition found.";
+                }
+                else
+                {
+                    NormalizeDocument(document);
+                    document.DatabaseName = _selectedDatabase;
+                    upload.Document = document;
+                    upload.Error = ValidateDocument(document);
+                }
+            }
+            catch (IOException)
+            {
+                upload.Error = "Unable to read file stream.";
+            }
+            catch (JsonException)
+            {
+                upload.Error = "Invalid table metadata JSON.";
+            }
+            catch (Exception exception)
+            {
+                upload.Error = "Unexpected parsing error.";
+                Logger.LogError(exception, "Failed to parse uploaded table metadata from {File}", file.Name);
+            }
+
+            _pendingUploads.Add(upload);
+        }
+
+        _filePickerVersion++;
+    }
+
+    private async Task UploadTablesAsync()
+    {
+        if (!CanUpload)
+            return;
+
+        _isUploading = true;
+        _uploadStatusMessage = null;
+
+        var uploaded = 0;
+        var failed = 0;
+
+        foreach (var item in _pendingUploads)
+        {
+            if (!item.CanUpload)
+                continue;
+
+            item.IsUploading = true;
+
+            try
+            {
+                await MetadataStorage.SaveTableAsync(_selectedDatabase!, item.Document);
+                item.Succeeded = true;
+                item.StatusMessage = "Uploaded";
+                uploaded++;
+            }
+            catch (Exception exception)
+            {
+                item.Succeeded = false;
+                item.StatusMessage = "Upload failed";
+                failed++;
+                Logger.LogError(
+                    exception,
+                    "Failed to upload table {TableName} from {FileName}",
+                    item.Document.TableName,
+                    item.FileName);
+            }
+            finally
+            {
+                item.IsCompleted = true;
+                item.IsUploading = false;
+            }
+        }
+
+        if (uploaded > 0 || failed > 0)
+        {
+            _uploadStatusMessage = failed == 0
+                ? $"Uploaded {uploaded} table(s) successfully."
+                : $"Uploaded {uploaded} table(s). {failed} failed—check the queue for details.";
+        }
+        else
+        {
+            _uploadStatusMessage = "No tables were uploaded.";
+        }
+
+        _isUploading = false;
+    }
+
+    private void RemoveUpload(UploadItem item)
+    {
+        _pendingUploads.Remove(item);
+    }
+
+    private void ClearQueue()
+    {
+        _pendingUploads.Clear();
+        _uploadStatusMessage = null;
+    }
+
+    private void NavigateToMainMenu() => Navigation.NavigateTo("/");
+
+    private static void NormalizeDocument(TableMetadataDocument document)
+    {
+        document.TableName = document.TableName?.Trim() ?? string.Empty;
+        document.Fields ??= new List<FieldMetadataDocument>();
+
+        foreach (var field in document.Fields)
+        {
+            if (field is null)
+                continue;
+
+            field.Name = field.Name?.Trim() ?? string.Empty;
+            field.DataType = field.DataType?.Trim() ?? string.Empty;
+            field.Length = Math.Max(0, field.Length);
+        }
+    }
+
+    private static string? ValidateDocument(TableMetadataDocument document)
+    {
+        if (string.IsNullOrWhiteSpace(document.TableName))
+            return "Table name is required.";
+
+        if (document.Fields is null || document.Fields.Count == 0)
+            return "At least one field must be defined.";
+
+        foreach (var field in document.Fields)
+        {
+            if (field is null)
+                return "Field definitions are incomplete.";
+
+            if (string.IsNullOrWhiteSpace(field.Name))
+                return "Each field needs a name.";
+
+            if (string.IsNullOrWhiteSpace(field.DataType))
+                return $"Field '{field.Name}' needs a data type.";
+        }
+
+        return null;
+    }
+
+    private static string ExtractDatabaseName(string? entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry))
+            return string.Empty;
+
+        const string suffix = "-config";
+        return entry.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            ? entry[..^suffix.Length]
+            : entry;
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes <= 0)
+            return "0 B";
+
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        var order = (int)Math.Min(suffixes.Length - 1, Math.Log(bytes, 1024));
+        var value = bytes / Math.Pow(1024, order);
+        return $"{value:0.#} {suffixes[order]}";
+    }
+
+    private sealed class UploadItem
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+        public string FileName { get; init; } = string.Empty;
+        public long SizeBytes { get; init; }
+        public TableMetadataDocument Document { get; set; } = new();
+        public string? Error { get; set; }
+        public bool IsCompleted { get; set; }
+        public bool Succeeded { get; set; }
+        public bool IsUploading { get; set; }
+        public string? StatusMessage { get; set; }
+        public int FieldCount => Document.Fields?.Count ?? 0;
+        public bool CanUpload => Error is null && !IsCompleted && !IsUploading;
+    }
+}

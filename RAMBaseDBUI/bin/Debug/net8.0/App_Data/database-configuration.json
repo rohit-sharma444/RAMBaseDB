@@ -1,0 +1,11 @@
+{
+  "databaseName": "TradingDB",
+  "configurationDirectory": "D:\\Test",
+  "configurationFile": "TradingDB_config",
+  "dumpDirectory": "D:\\Test",
+  "dumpFilePrefix": "dump",
+  "enableAutomaticSnapshots": true,
+  "snapshotInterval": "00:05:00",
+  "maxSnapshotHistory": 10,
+  "autoRestoreLatestDump": false
+}

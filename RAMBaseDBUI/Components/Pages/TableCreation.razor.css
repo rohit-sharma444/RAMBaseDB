@@ -1,0 +1,485 @@
+:root {
+    --surface-dark: rgba(15, 23, 42, 0.85);
+    --surface-darker: rgba(15, 23, 42, 0.95);
+    --border-muted: rgba(148, 163, 184, 0.35);
+    --accent: rgba(168, 85, 247, 1);
+    --accent-soft: rgba(168, 85, 247, 0.4);
+}
+
+.table-creation {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    padding: 2.5rem;
+    border-radius: 1.5rem;
+    background: var(--surface-dark);
+    border: 1px solid var(--border-muted);
+    box-shadow: 0 35px 70px rgba(2, 6, 23, 0.65);
+}
+
+.table-creation__lead-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.table-creation__back-button {
+    padding: 0.45rem 0.9rem;
+    border-radius: 0.85rem;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    background: transparent;
+    color: rgba(226, 232, 240, 0.95);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.table-creation__back-button:hover {
+    border-color: var(--accent-soft);
+    background: rgba(168, 85, 247, 0.15);
+}
+
+.table-creation__lead h1 {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    margin-bottom: 0.35rem;
+}
+
+.table-creation__lead p {
+    max-width: 48rem;
+    color: rgba(226, 232, 240, 0.85);
+}
+
+.table-creation__actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+    gap: 1.5rem;
+}
+
+.action-card {
+    padding: 1.5rem;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--surface-darker);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.action-card h2 {
+    margin: 0;
+}
+
+.action-card p {
+    margin: 0;
+    color: rgba(226, 232, 240, 0.7);
+}
+
+.form-control {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.form-control label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(226, 232, 240, 0.85);
+}
+
+.form-control input,
+.form-control select,
+.form-control .select,
+.properties-panel input,
+.properties-panel select {
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.75);
+    color: #fff;
+}
+
+.form-control__readonly {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.35);
+    color: rgba(226, 232, 240, 0.6);
+}
+
+.action-card button,
+.table-node__header,
+.field-node button {
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.action-card button {
+    margin-top: auto;
+    padding: 0.75rem 1rem;
+    border-radius: 0.85rem;
+    background: linear-gradient(120deg, rgba(168, 85, 247, 0.9), rgba(236, 72, 153, 0.9));
+    color: #fff;
+    font-weight: 600;
+}
+
+.action-card__status {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: rgba(226, 232, 240, 0.65);
+}
+
+.action-card--field button {
+    margin-top: 0.5rem;
+}
+
+.action-card button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.field-card__toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.table-creation__workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    gap: 1.5rem;
+}
+
+.table-tree,
+.properties-panel {
+    padding: 1.5rem;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--surface-darker);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.table-tree__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.table-tree__database {
+    margin: 0.3rem 0 0;
+    font-size: 0.9rem;
+    color: rgba(226, 232, 240, 0.7);
+}
+
+.table-tree__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.tree-view,
+.tree-view ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 1.25rem;
+    position: relative;
+}
+
+.tree-view ul::before {
+    content: "";
+    position: absolute;
+    top: 0.85rem;
+    left: 0.35rem;
+    bottom: 0.5rem;
+    border-left: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.tree-view > li {
+    padding-left: 0;
+}
+
+.tree-view li {
+    position: relative;
+}
+
+.tree-view li::before {
+    content: "";
+    position: absolute;
+    top: 0.95rem;
+    left: -0.9rem;
+    width: 0.9rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.tree-view > li::before {
+    display: none;
+}
+
+.tree-view--fields {
+    padding-left: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+.tree-view--fields > li::before {
+    display: block;
+    left: -1.1rem;
+}
+
+.table-node {
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 1rem;
+    padding: 0.75rem 0.75rem 0.5rem;
+    background: rgba(15, 23, 42, 0.7);
+}
+
+.table-node__header {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.table-node__toggle {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.65);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 1.05rem;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.table-node__toggle:hover {
+    border-color: var(--accent-soft);
+    background: rgba(168, 85, 247, 0.15);
+}
+
+.table-node__title {
+    flex: 1;
+    text-align: left;
+    background: transparent;
+    color: #fff;
+    font-size: 1rem;
+    border: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    cursor: pointer;
+}
+
+.table-node__title small {
+    color: rgba(226, 232, 240, 0.6);
+    font-size: 0.8rem;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.table-node__title.is-active {
+    border: 1px solid var(--accent-soft);
+    background: rgba(168, 85, 247, 0.12);
+}
+
+.table-node__title:hover:not(.is-active) {
+    background: rgba(168, 85, 247, 0.08);
+}
+
+.table-node__collapsed-hint {
+    margin: 0.5rem 0 0;
+    font-size: 0.85rem;
+    color: rgba(226, 232, 240, 0.6);
+}
+
+.table-node__empty {
+    margin: 0.5rem 0 0;
+    color: rgba(226, 232, 240, 0.5);
+    font-size: 0.85rem;
+}
+
+.field-node button {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.75rem;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid transparent;
+    color: rgba(226, 232, 240, 0.9);
+    gap: 0.75rem;
+}
+
+.field-node.is-selected button {
+    border-color: var(--accent-soft);
+    background: rgba(168, 85, 247, 0.12);
+    color: #fff;
+}
+
+.field-node__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    align-items: flex-start;
+}
+
+.field-node__type {
+    font-size: 0.8rem;
+    color: rgba(226, 232, 240, 0.6);
+}
+
+.field-node__badges {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.field-badge {
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    color: rgba(248, 250, 252, 0.9);
+}
+
+.field-badge--muted {
+    border-color: rgba(148, 163, 184, 0.4);
+    color: rgba(226, 232, 240, 0.75);
+}
+
+.tree-btn {
+    border-radius: 0.85rem;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    padding: 0.5rem 1.25rem;
+    background: transparent;
+    color: rgba(226, 232, 240, 0.95);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tree-btn:hover:not(:disabled) {
+    border-color: var(--accent-soft);
+    background: rgba(168, 85, 247, 0.12);
+}
+
+.tree-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.properties-panel__empty {
+    color: rgba(226, 232, 240, 0.7);
+    font-size: 0.95rem;
+}
+
+.properties-panel__form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.properties-panel__actions {
+    margin-top: 0.5rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.properties-panel__delete {
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    background: rgba(248, 113, 113, 0.12);
+    color: #fee2e2;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.properties-panel__delete:hover:not(:disabled) {
+    background: rgba(248, 113, 113, 0.2);
+    border-color: rgba(248, 113, 113, 0.7);
+}
+
+.properties-panel__delete:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.form-control--readonly input {
+    font-size: 0.85rem;
+    color: rgba(226, 232, 240, 0.6);
+}
+
+.toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    color: rgba(226, 232, 240, 0.9);
+}
+
+.toggle input {
+    width: auto;
+}
+
+.properties-panel__summary {
+    padding: 1rem;
+    border-radius: 1rem;
+    border: 1px dashed rgba(168, 85, 247, 0.4);
+    background: rgba(15, 23, 42, 0.6);
+}
+
+.properties-panel__summary h3 {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+}
+
+.properties-panel__summary dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+}
+
+.properties-panel__summary dt {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(226, 232, 240, 0.6);
+}
+
+.properties-panel__summary dd {
+    margin: 0.2rem 0 0;
+    font-size: 1rem;
+    color: rgba(226, 232, 240, 0.95);
+}
+
+@media (max-width: 900px) {
+    .table-creation__workspace {
+        grid-template-columns: 1fr;
+    }
+}
